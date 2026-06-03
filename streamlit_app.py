@@ -489,6 +489,12 @@ with st.sidebar:
     st.caption("Built with FastAPI · LangChain · ChromaDB · Groq LLM")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Process submission BEFORE rendering chat history
+# ─────────────────────────────────────────────────────────────────────────────
+# Handle pre-filled questions from sample buttons
+prefill = st.session_state.pop("prefill_question", "")
+
 def submit_chat():
     """Callback to handle chat submission (from button or Enter key)."""
     q = st.session_state.user_input_field.strip()
@@ -496,6 +502,40 @@ def submit_chat():
         st.session_state.pending_question = q
     # Clear the input field in session state
     st.session_state.user_input_field = ""
+
+# question comes either from a sidebar prefill button, or from the callback
+question = prefill or st.session_state.pop("pending_question", "")
+
+if question:
+    ts_now = datetime.now().strftime("%H:%M")
+
+    # Add user message
+    st.session_state.messages.append({
+        "role": "user",
+        "content": question,
+        "timestamp": ts_now,
+    })
+
+    # Call the API
+    with st.spinner("🔍 Searching knowledge base…"):
+        start = time.time()
+        result = call_ask(question)
+        elapsed = round(time.time() - start, 2)
+
+    # Build assistant message
+    if result is None:
+        data = {"error": "Could not reach the API. Make sure the FastAPI server is running on port 8000."}
+    elif "error" in result:
+        data = result
+    else:
+        data = result
+
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": data.get("answer", data.get("error", "")),
+        "data": data,
+        "timestamp": f"{ts_now} ({elapsed}s)",
+    })
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -538,9 +578,6 @@ with chat_placeholder:
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("<br>", unsafe_allow_html=True)
 
-# Handle pre-filled questions from sample buttons
-prefill = st.session_state.pop("prefill_question", "")
-
 col_input, col_send = st.columns([5, 1])
 with col_input:
     # We remove `value=prefill` so it doesn't conflict with session state clearing.
@@ -555,41 +592,3 @@ with col_input:
 with col_send:
     send_clicked = st.button("Send ➤", key="btn_send", use_container_width=True, on_click=submit_chat)
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Process submission
-# ─────────────────────────────────────────────────────────────────────────────
-# question comes either from a sidebar prefill button, or from the callback
-question = prefill or st.session_state.pop("pending_question", "")
-
-if question:
-    ts_now = datetime.now().strftime("%H:%M")
-
-    # Add user message
-    st.session_state.messages.append({
-        "role": "user",
-        "content": question,
-        "timestamp": ts_now,
-    })
-
-    # Call the API
-    with st.spinner("🔍 Searching knowledge base…"):
-        start = time.time()
-        result = call_ask(question)
-        elapsed = round(time.time() - start, 2)
-
-    # Build assistant message
-    if result is None:
-        data = {"error": "Could not reach the API. Make sure the FastAPI server is running on port 8000."}
-    elif "error" in result:
-        data = result
-    else:
-        data = result
-
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": data.get("answer", data.get("error", "")),
-        "data": data,
-        "timestamp": f"{ts_now} ({elapsed}s)",
-    })
-
-    st.rerun()
