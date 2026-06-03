@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 RAG_INTENT = "rag"
 APPOINTMENT_INTENT = "appointment"
+GREETING_INTENT = "greeting"
 
 # Only booking-action words trigger the appointment tool.
 # Informational words like "appointment" alone route to RAG.
@@ -47,6 +48,9 @@ _DATE_TOKENS = [
     "saturday", "sunday", "today", "tomorrow", "next week",
 ]
 
+_GREETING_TOKENS = ["hello", "hi", "hey", "greetings", "good morning", "good afternoon", "good evening"]
+
+
 
 # ---------------------------------------------------------------------------
 # 1. Intent detection
@@ -65,11 +69,19 @@ def detect_intent(question: str) -> str:
     Returns:
         APPOINTMENT_INTENT or RAG_INTENT string constant.
     """
-    lowered = question.lower()
+    lowered = question.lower().strip()
     for keyword in APPOINTMENT_KEYWORDS:
         if keyword in lowered:
             logger.info("Intent detected: %s (matched keyword: '%s')", APPOINTMENT_INTENT, keyword)
             return APPOINTMENT_INTENT
+
+    # Simple heuristic: if the question is very short and starts with or equals a greeting
+    import re
+    if len(lowered) < 30:
+        for greeting in _GREETING_TOKENS:
+            if re.search(r'\b' + re.escape(greeting) + r'\b', lowered):
+                logger.info("Intent detected: %s", GREETING_INTENT)
+                return GREETING_INTENT
 
     logger.info("Intent detected: %s", RAG_INTENT)
     return RAG_INTENT
@@ -169,7 +181,26 @@ def handle_appointment_question(question: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# 4. Main router
+# 4. Greeting handler
+# ---------------------------------------------------------------------------
+
+def handle_greeting(question: str) -> dict:
+    """
+    Handle generic greetings directly to avoid unnecessary RAG searches.
+    """
+    return {
+        "answer": "Hello! I am the Healthcare AI Assistant. How can I help you with our facility's policies, guidelines, or appointments today?",
+        "sources": [],
+        "confidence": "high",
+        "question": question,
+        "model_used": "rule_based_routing",
+        "tool_used": None,
+        "tool_response": None,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 5. Main router
 # ---------------------------------------------------------------------------
 
 def route_and_answer(question: str) -> dict:
@@ -190,6 +221,10 @@ def route_and_answer(question: str) -> dict:
     if intent == APPOINTMENT_INTENT:
         logger.info("Routing to appointment handler for question: %s", question)
         return handle_appointment_question(question)
+        
+    if intent == GREETING_INTENT:
+        logger.info("Routing to greeting handler for question: %s", question)
+        return handle_greeting(question)
 
     logger.info("Routing to RAG pipeline for question: %s", question)
     return query_rag(question)
