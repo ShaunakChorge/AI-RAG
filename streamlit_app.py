@@ -6,6 +6,7 @@ Features: document ingestion, multi-turn chat, source citations,
 confidence badges, appointment tool indicators, and health status sidebar.
 """
 
+import html
 import time
 import streamlit as st
 import requests
@@ -29,10 +30,11 @@ import os
 API_BASE = os.getenv("API_BASE_URL", "http://localhost:8000")
 
 CONFIDENCE_COLORS = {
-    "high":   "#10b981",  # emerald
-    "medium": "#f59e0b",  # amber
-    "low":    "#ef4444",  # red
-    "none":   "#6b7280",  # gray
+    "high":          "#10b981",  # emerald
+    "medium":        "#f59e0b",  # amber
+    "low":           "#ef4444",  # red
+    "none":          "#6b7280",  # gray
+    "conversational": "#8b5cf6", # purple — off-topic / chit-chat
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -97,6 +99,7 @@ html, body, [class*="css"] {
     color: #e0f2fe;
     font-size: 0.95rem;
     box-shadow: 0 4px 15px rgba(29, 78, 216, 0.3);
+    word-break: break-word;
 }
 .chat-bubble-assistant {
     background: linear-gradient(135deg, #1e293b, #0f172a);
@@ -108,6 +111,7 @@ html, body, [class*="css"] {
     color: #e2e8f0;
     font-size: 0.95rem;
     box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    word-break: break-word;
 }
 .chat-timestamp {
     color: #475569;
@@ -251,6 +255,9 @@ if "health_info" not in st.session_state:
 if "pending_question" not in st.session_state:
     st.session_state.pending_question = ""
 
+if "user_input_field" not in st.session_state:
+    st.session_state.user_input_field = ""
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper functions
@@ -308,13 +315,31 @@ def call_ask(question: str) -> dict | None:
         return {"error": str(e)}
 
 
+def safe_text(text: str) -> str:
+    """Escape HTML special characters to prevent XSS / layout-breaking input."""
+    return html.escape(str(text))
+
+
 def confidence_badge(level: str) -> str:
+    """Return an HTML badge for the given confidence level.
+    Returns empty string for 'conversational' intent (no badge needed)."""
+    if level == "conversational":
+        return ""
     color = CONFIDENCE_COLORS.get(level, "#6b7280")
     return (
         f'<span class="badge" style="background:{color}22;'
         f'border:1px solid {color};color:{color};">'
         f'⬤ {level.upper()}</span>'
     )
+
+
+def friendly_model_label(model_used: str) -> str:
+    """Convert internal model identifiers into human-readable labels."""
+    labels = {
+        "scheduling_tool_v1": "📅 Scheduling Tool",
+        "rule_based_routing": "💬 Assistant",
+    }
+    return labels.get(model_used, f"🤖 {model_used}")
 
 
 def render_message(msg: dict):
@@ -325,7 +350,7 @@ def render_message(msg: dict):
     if role == "user":
         st.markdown(
             f'<div class="chat-bubble-user">'
-            f'<strong>You</strong><br>{msg["content"]}'
+            f'<strong>You</strong><br>{safe_text(msg["content"])}'
             f'<div class="chat-timestamp">{ts}</div>'
             f'</div>',
             unsafe_allow_html=True,
@@ -343,7 +368,7 @@ def render_message(msg: dict):
         if error:
             st.markdown(
                 f'<div class="chat-bubble-assistant">'
-                f'⚠️ <strong>Error:</strong> {error}'
+                f'⚠️ <strong>Error:</strong> {safe_text(error)}'
                 f'<div class="chat-timestamp">{ts}</div>'
                 f'</div>',
                 unsafe_allow_html=True,
@@ -356,25 +381,28 @@ def render_message(msg: dict):
             tool_tag = (
                 '<span class="badge" style="background:rgba(52,211,153,0.15);'
                 'border:1px solid #34d399;color:#34d399;">'
-                f'🔧 {tool_used}</span>'
+                f'🔧 {safe_text(tool_used)}</span>'
             )
+
+        badge_html = confidence_badge(confidence)
+        model_label = friendly_model_label(model_used)
 
         st.markdown(
             f'<div class="chat-bubble-assistant">'
-            f'{confidence_badge(confidence)}{tool_tag}'
-            f'<div style="margin-top:10px;line-height:1.7;">{answer}</div>'
+            f'{badge_html}{tool_tag}'
+            f'<div style="margin-top:10px;line-height:1.7;">{safe_text(answer)}</div>'
             f'<div class="chat-timestamp" style="margin-top:8px;">'
-            f'🤖 {model_used} · {ts}</div>'
+            f'{model_label} · {ts}</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
 
-        # Appointment tool response
+        # Appointment tool response card
         if tool_response:
             slots = ", ".join(tool_response.get("available_slots", []))
-            dept = tool_response.get("department", "")
-            date = tool_response.get("date", "")
-            instr = tool_response.get("booking_instructions", "")
+            dept = safe_text(tool_response.get("department", ""))
+            date = safe_text(tool_response.get("date", ""))
+            instr = safe_text(tool_response.get("booking_instructions", ""))
             st.markdown(
                 f'<div class="tool-card">'
                 f'📅 <strong>Mock Scheduling Tool Response</strong><br>'
@@ -385,12 +413,12 @@ def render_message(msg: dict):
                 unsafe_allow_html=True,
             )
 
-        # Source citations
+        # Source citations (only show if there are actual sources)
         if sources:
             with st.expander(f"📄 {len(sources)} source(s) used", expanded=False):
                 for src in sources:
-                    doc = src.get("document", "unknown")
-                    chunk = src.get("chunk", "")
+                    doc = safe_text(src.get("document", "unknown"))
+                    chunk = safe_text(src.get("chunk", ""))
                     st.markdown(
                         f'<div class="source-card">'
                         f'<div class="source-doc-name">📎 {doc}</div>'
@@ -398,6 +426,61 @@ def render_message(msg: dict):
                         f'</div>',
                         unsafe_allow_html=True,
                     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Input callback — runs BEFORE the main script body on widget interaction
+# ─────────────────────────────────────────────────────────────────────────────
+def submit_chat():
+    """
+    Callback fired by the text_input on_change OR by the Send button on_click.
+    Safely reads the current field value, stores it for processing, and clears
+    the field so it appears empty after the next render.
+    """
+    raw = st.session_state.get("user_input_field", "").strip()
+    if raw and len(raw) >= 2:
+        # Only store if not already pending (prevents dual-fire from click+blur)
+        if not st.session_state.pending_question:
+            st.session_state.pending_question = raw
+    st.session_state.user_input_field = ""
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Process any pending question FIRST — before rendering anything
+# ─────────────────────────────────────────────────────────────────────────────
+prefill = st.session_state.pop("prefill_question", "")
+question = prefill or st.session_state.pop("pending_question", "")
+
+if question:
+    ts_now = datetime.now().strftime("%H:%M")
+
+    # Add user message to history
+    st.session_state.messages.append({
+        "role": "user",
+        "content": question,
+        "timestamp": ts_now,
+    })
+
+    # Call the backend
+    with st.spinner("🔍 Searching knowledge base…"):
+        start = time.time()
+        result = call_ask(question)
+        elapsed = round(time.time() - start, 2)
+
+    # Build assistant message
+    if result is None:
+        data = {"error": "Could not reach the API. Make sure the FastAPI server is running."}
+    elif "error" in result:
+        data = result
+    else:
+        data = result
+
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": data.get("answer", data.get("error", "")),
+        "data": data,
+        "timestamp": f"{ts_now} ({elapsed}s)",
+    })
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -490,55 +573,6 @@ with st.sidebar:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Process submission BEFORE rendering chat history
-# ─────────────────────────────────────────────────────────────────────────────
-# Handle pre-filled questions from sample buttons
-prefill = st.session_state.pop("prefill_question", "")
-
-def submit_chat():
-    """Callback to handle chat submission (from button or Enter key)."""
-    q = st.session_state.user_input_field.strip()
-    if q:
-        st.session_state.pending_question = q
-    # Clear the input field in session state
-    st.session_state.user_input_field = ""
-
-# question comes either from a sidebar prefill button, or from the callback
-question = prefill or st.session_state.pop("pending_question", "")
-
-if question:
-    ts_now = datetime.now().strftime("%H:%M")
-
-    # Add user message
-    st.session_state.messages.append({
-        "role": "user",
-        "content": question,
-        "timestamp": ts_now,
-    })
-
-    # Call the API
-    with st.spinner("🔍 Searching knowledge base…"):
-        start = time.time()
-        result = call_ask(question)
-        elapsed = round(time.time() - start, 2)
-
-    # Build assistant message
-    if result is None:
-        data = {"error": "Could not reach the API. Make sure the FastAPI server is running on port 8000."}
-    elif "error" in result:
-        data = result
-    else:
-        data = result
-
-    st.session_state.messages.append({
-        "role": "assistant",
-        "content": data.get("answer", data.get("error", "")),
-        "data": data,
-        "timestamp": f"{ts_now} ({elapsed}s)",
-    })
-
-
-# ─────────────────────────────────────────────────────────────────────────────
 # Main area — header
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -580,9 +614,7 @@ st.markdown("<br>", unsafe_allow_html=True)
 
 col_input, col_send = st.columns([5, 1])
 with col_input:
-    # We remove `value=prefill` so it doesn't conflict with session state clearing.
-    # Instead, we push prefill directly into the processing pipeline if present.
-    user_input = st.text_input(
+    st.text_input(
         "Ask a healthcare question…",
         placeholder="e.g. Can I request a medication refill through telehealth?",
         label_visibility="collapsed",
@@ -590,5 +622,6 @@ with col_input:
         on_change=submit_chat,
     )
 with col_send:
-    send_clicked = st.button("Send ➤", key="btn_send", use_container_width=True, on_click=submit_chat)
-
+    # on_click fires the same callback as on_change. The dedup guard in
+    # submit_chat (checking pending_question is empty) prevents double-send.
+    st.button("Send ➤", key="btn_send", use_container_width=True, on_click=submit_chat)

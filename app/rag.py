@@ -5,6 +5,7 @@ Handles retrieval, prompt construction, LLM invocation, and
 source formatting for the healthcare question-answering pipeline.
 """
 
+import os
 import logging
 from langchain_community.vectorstores import Chroma
 from langchain.schema import HumanMessage, SystemMessage
@@ -53,6 +54,29 @@ def get_retriever(vectorstore):
     )
 
 
+def get_relevant_docs_with_threshold(vectorstore, question: str, k: int = 3, score_threshold: float = 0.35) -> list:
+    """
+    Retrieve top-k chunks but only return those above a minimum similarity
+    score to prevent hallucination on completely unrelated queries.
+
+    Args:
+        vectorstore:     The Chroma vectorstore.
+        question:        User's question.
+        k:               Maximum number of chunks to retrieve.
+        score_threshold: Minimum relevance score (0.0–1.0, higher = stricter).
+
+    Returns:
+        Filtered list of Document objects.
+    """
+    docs_with_scores = vectorstore.similarity_search_with_relevance_scores(question, k=k)
+    filtered = [doc for doc, score in docs_with_scores if score >= score_threshold]
+    logger.info(
+        "Retrieved %d/%d chunks above score threshold %.2f",
+        len(filtered), len(docs_with_scores), score_threshold,
+    )
+    return filtered
+
+
 def format_sources(source_documents: list) -> list:
     """
     Convert a list of LangChain Document objects into serialisable source dicts.
@@ -68,7 +92,6 @@ def format_sources(source_documents: list) -> list:
     seen = set()
     sources = []
     for doc in source_documents:
-        import os
         raw_source = doc.metadata.get("source", "unknown")
         doc_name = os.path.basename(raw_source)
 
@@ -145,10 +168,26 @@ def query_rag(question: str) -> dict:
                 "Knowledge base is empty. Please call POST /ingest first."
             )
 
-        # ── 3. Retrieve relevant chunks ──────────────────────────────────────
-        retriever = get_retriever(vectorstore)
-        retrieved_docs = retriever.invoke(question)
-        logger.info("Retrieved %d chunks for question", len(retrieved_docs))
+        # ── 3. Retrieve relevant chunks with score threshold ─────────────────
+        settings = get_settings()
+        retrieved_docs = get_relevant_docs_with_threshold(
+            vectorstore, question, k=settings.RETRIEVAL_K, score_threshold=0.35
+        )
+        logger.info("Using %d chunks after score filtering", len(retrieved_docs))
+
+        # If no chunks pass the threshold, the question is out-of-scope
+        if not retrieved_docs:
+            logger.info("No relevant chunks found above threshold — returning not-found response.")
+            return {
+                "answer": (
+                    "I could not find this information in the provided documents. "
+                    "Please contact the healthcare facility directly for assistance."
+                ),
+                "sources": [],
+                "confidence": "none",
+                "question": question,
+                "model_used": settings.GROQ_MODEL,
+            }
 
         # ── 4. Build context and call LLM ────────────────────────────────────
         context = "\n\n".join(doc.page_content for doc in retrieved_docs)

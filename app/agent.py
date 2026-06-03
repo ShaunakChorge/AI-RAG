@@ -29,42 +29,60 @@ CONVERSATIONAL_INTENT = "conversational"
 # Keyword lists
 # ---------------------------------------------------------------------------
 
-# Booking-action words → mock scheduling tool
+# Booking-action words → mock scheduling tool.
+# Kept tight: must be explicit booking verbs, NOT generic medical words.
 APPOINTMENT_KEYWORDS = [
-    "book",
-    "schedule",
+    "book an appointment",
+    "schedule an appointment",
+    "make an appointment",
+    "book a",          # "book a cardiology", "book a slot"
     "available slots",
     "see a doctor",
-    "consult",
-    "when can i",
+    "when can i see",
     "next available",
-    "slot",
-    "cardiology",
-    "orthopedics",
-    "neurology",
-    "general medicine",
+    "book me",
+    "i want to book",
+    "i want to schedule",
+    "i need an appointment",
 ]
 
 # Healthcare / document-domain words → RAG pipeline.
-# If NONE of these appear in the query, we skip the vector store entirely.
+# Only specific clinical, admin, and policy terms — NOT generic English words.
 RAG_TRIGGER_KEYWORDS = [
-    # Medical topics
-    "medication", "medicine", "prescription", "drug", "refill", "dosage",
-    "treatment", "diagnosis", "symptom", "condition", "disease", "illness",
-    "surgery", "procedure", "recovery", "discharge", "follow-up",
-    "pain", "allergy", "vaccine", "vaccination", "lab", "test", "result",
+    # Clinical / medical
+    "medication", "medicine", "prescription", "drug", "drugs", "refill",
+    "dosage", "dose", "treatment", "diagnosis", "symptom", "symptoms",
+    "condition", "disease", "illness", "surgery", "procedure", "recovery",
+    "discharge", "follow-up", "follow up", "allergy", "allergies",
+    "vaccine", "vaccination", "immunization", "x-ray", "mri", "ct scan",
+    "blood pressure", "blood test", "cholesterol", "diabetes",
     # Facility / admin
-    "insurance", "coverage", "claim", "billing", "payment", "copay",
-    "deductible", "prior authorization", "formulary",
-    "appointment", "clinic", "hospital", "doctor", "physician",
-    "nurse", "patient", "portal", "record", "medical record",
-    "department", "specialist", "referral", "emergency",
-    "telehealth", "virtual visit", "telemedicine",
+    "insurance", "coverage", "co-pay", "copay", "claim", "billing",
+    "deductible", "prior authorization", "formulary", "network",
+    "appointment policy", "clinic hours", "office hours",
+    "hospital", "physician", "nurse", "patient portal", "medical record",
+    "specialist", "referral", "emergency room", "urgent care",
+    "telehealth", "virtual visit", "telemedicine", "video visit",
+    "department hours",
     # Policy / compliance
-    "hipaa", "privacy", "phi", "data", "consent", "rights",
-    "policy", "guideline", "procedure", "instruction",
-    "hours", "open", "closed", "when", "how long", "how do i",
-    "what is the", "what are", "can i", "do i need",
+    "hipaa", "privacy policy", "phi", "patient rights", "consent form",
+    "policy", "guideline", "guidelines", "instruction", "instructions",
+    "facility policy", "healthcare policy",
+    # Natural question starters about the documents
+    "what is the policy",
+    "what are the guidelines",
+    "how do i request",
+    "how long does",
+    "how many days",
+    "can a patient",
+    "am i allowed",
+    "do i need a referral",
+    "is it covered",
+    "what documents",
+    "how to prepare",
+    "after discharge",
+    "before surgery",
+    "during recovery",
 ]
 
 # ---------------------------------------------------------------------------
@@ -72,14 +90,19 @@ RAG_TRIGGER_KEYWORDS = [
 # ---------------------------------------------------------------------------
 
 _DEPARTMENT_MAP = {
-    "cardiology":  ("cardiology", "heart"),
-    "orthopedics": ("orthopedic", "bone", "joint"),
-    "neurology":   ("neuro", "brain"),
+    "cardiology":  ("cardiology", "heart", "cardiac"),
+    "orthopedics": ("orthopedic", "orthopedics", "bone", "joint", "spine"),
+    "neurology":   ("neurology", "neurology", "neuro", "brain", "nerve"),
+    "general medicine": ("general medicine", "general practitioner", "gp"),
+    "dermatology": ("dermatology", "skin", "dermatologist"),
+    "pediatrics":  ("pediatric", "pediatrics", "child", "children"),
 }
 
 _DATE_TOKENS = [
     "monday", "tuesday", "wednesday", "thursday", "friday",
     "saturday", "sunday", "today", "tomorrow", "next week",
+    "this week", "next monday", "next tuesday", "next wednesday",
+    "next thursday", "next friday",
 ]
 
 
@@ -92,8 +115,8 @@ def detect_intent(question: str) -> str:
     Classify the user's question into one of three intents.
 
     Priority order:
-      1. APPOINTMENT_INTENT  — booking-action keyword found
-      2. RAG_INTENT          — at least one healthcare keyword found
+      1. APPOINTMENT_INTENT  — explicit booking-action phrase found
+      2. RAG_INTENT          — at least one specific healthcare keyword found
       3. CONVERSATIONAL_INTENT — no domain keywords; treat as chit-chat
 
     Args:
@@ -113,7 +136,7 @@ def detect_intent(question: str) -> str:
             )
             return APPOINTMENT_INTENT
 
-    # ── 2. RAG check — opt-in: only if a domain keyword is present ───────────
+    # ── 2. RAG check — opt-in: only if a specific domain keyword is present ──
     for keyword in RAG_TRIGGER_KEYWORDS:
         if keyword in lowered:
             logger.info(
@@ -147,7 +170,7 @@ def check_available_slots(department: str, date: str) -> dict:
         "date": date,
         "available_slots": ["9:00 AM", "11:30 AM", "2:00 PM", "4:00 PM"],
         "booking_instructions": (
-            "Call 1-800-HEALTH-1 or visit patient portal to confirm"
+            "Call 1-800-HEALTH-1 or visit the patient portal to confirm"
         ),
         "note": (
             "Slot availability is illustrative. "
@@ -206,7 +229,7 @@ def handle_appointment_question(question: str) -> dict:
         "sources": [
             {
                 "document": "appointment_policy.txt",
-                "chunk": "Mock scheduling tool response",
+                "chunk": "Mock scheduling tool response — slots are illustrative only.",
             }
         ],
         "confidence": "high",
@@ -232,18 +255,28 @@ def handle_conversational(question: str) -> dict:
     lowered = question.lower().strip()
 
     # Personalised response for identity questions
-    if any(phrase in lowered for phrase in ["your name", "who are you", "what are you"]):
+    if any(phrase in lowered for phrase in ["your name", "who are you", "what are you", "what do you do"]):
         answer = (
             "I'm the Healthcare AI Assistant for this medical facility. "
             "I can answer questions about our policies, medications, insurance, "
             "discharge instructions, telehealth guidelines, and appointment availability. "
             "What can I help you with today?"
         )
-    elif any(phrase in lowered for phrase in ["how are you", "you okay", "you good"]):
+    elif any(phrase in lowered for phrase in ["how are you", "you okay", "you good", "are you well"]):
         answer = (
             "I'm doing great and ready to help! "
             "Feel free to ask me anything about our healthcare services, "
             "policies, or appointments."
+        )
+    elif any(phrase in lowered for phrase in ["thank", "thanks", "thank you", "thx"]):
+        answer = (
+            "You're welcome! If you have any more healthcare questions, "
+            "feel free to ask anytime."
+        )
+    elif any(phrase in lowered for phrase in ["bye", "goodbye", "see you", "cya"]):
+        answer = (
+            "Goodbye! Take care and stay healthy. "
+            "Come back anytime you have healthcare questions."
         )
     else:
         # Generic catch-all for anything off-topic
@@ -257,7 +290,7 @@ def handle_conversational(question: str) -> dict:
     return {
         "answer": answer,
         "sources": [],
-        "confidence": "high",
+        "confidence": "conversational",
         "question": question,
         "model_used": "rule_based_routing",
         "tool_used": None,
