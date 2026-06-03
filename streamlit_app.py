@@ -21,10 +21,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+import os
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Constants
 # ─────────────────────────────────────────────────────────────────────────────
-API_BASE = "http://localhost:8000"
+API_BASE = os.getenv("API_BASE_URL", "http://localhost:8000")
 
 CONFIDENCE_COLORS = {
     "high":   "#10b981",  # emerald
