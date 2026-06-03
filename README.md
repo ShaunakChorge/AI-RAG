@@ -9,7 +9,7 @@ app_port: 8000
 
 # Healthcare AI Assistant
 
-🚀 **Live Interactive Demo:** [ai-rag-shaunakchorge.streamlit.app](https://ai-rag-shaunakchorge.streamlit.app)
+
 
 ---
 
