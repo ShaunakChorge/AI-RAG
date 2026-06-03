@@ -9,8 +9,6 @@ app_port: 8000
 
 # Healthcare AI Assistant
 
-
-
 ---
 
 ## Overview
