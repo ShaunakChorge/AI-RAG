@@ -248,6 +248,9 @@ if "ingested" not in st.session_state:
 if "health_info" not in st.session_state:
     st.session_state.health_info = None
 
+if "pending_question" not in st.session_state:
+    st.session_state.pending_question = ""
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Helper functions
@@ -486,6 +489,15 @@ with st.sidebar:
     st.caption("Built with FastAPI · LangChain · ChromaDB · Groq LLM")
 
 
+def submit_chat():
+    """Callback to handle chat submission (from button or Enter key)."""
+    q = st.session_state.user_input_field.strip()
+    if q:
+        st.session_state.pending_question = q
+    # Clear the input field in session state
+    st.session_state.user_input_field = ""
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Main area — header
 # ─────────────────────────────────────────────────────────────────────────────
@@ -531,22 +543,25 @@ prefill = st.session_state.pop("prefill_question", "")
 
 col_input, col_send = st.columns([5, 1])
 with col_input:
+    # We remove `value=prefill` so it doesn't conflict with session state clearing.
+    # Instead, we push prefill directly into the processing pipeline if present.
     user_input = st.text_input(
         "Ask a healthcare question…",
-        value=prefill,
         placeholder="e.g. Can I request a medication refill through telehealth?",
         label_visibility="collapsed",
         key="user_input_field",
+        on_change=submit_chat,
     )
 with col_send:
-    send_clicked = st.button("Send ➤", key="btn_send", use_container_width=True)
+    send_clicked = st.button("Send ➤", key="btn_send", use_container_width=True, on_click=submit_chat)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Process submission
 # ─────────────────────────────────────────────────────────────────────────────
-question = (user_input or "").strip()
+# question comes either from a sidebar prefill button, or from the callback
+question = prefill or st.session_state.pop("pending_question", "")
 
-if (send_clicked or prefill) and question:
+if question:
     ts_now = datetime.now().strftime("%H:%M")
 
     # Add user message
