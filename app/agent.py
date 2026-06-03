@@ -2,24 +2,34 @@
 Agent Module for Healthcare AI Assistant.
 
 Coordinates intent detection, tool dispatching, and routing between
-the scheduling mock tool and the RAG pipeline for the /ask endpoint.
+the scheduling mock tool, the RAG pipeline, and the conversational
+fallback for the /ask endpoint.
+
+Routing priority (checked in order):
+  1. APPOINTMENT_INTENT  — booking-action keywords  → mock scheduling tool
+  2. RAG_INTENT          — healthcare-topic keywords → RAG pipeline
+  3. CONVERSATIONAL_INTENT (default)                → polite fallback reply
 """
 
+import re
 import logging
 from app.rag import query_rag
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Intent constants and keyword lists
+# Intent constants
 # ---------------------------------------------------------------------------
 
-RAG_INTENT = "rag"
-APPOINTMENT_INTENT = "appointment"
-GREETING_INTENT = "greeting"
+APPOINTMENT_INTENT    = "appointment"
+RAG_INTENT            = "rag"
+CONVERSATIONAL_INTENT = "conversational"
 
-# Only booking-action words trigger the appointment tool.
-# Informational words like "appointment" alone route to RAG.
+# ---------------------------------------------------------------------------
+# Keyword lists
+# ---------------------------------------------------------------------------
+
+# Booking-action words → mock scheduling tool
 APPOINTMENT_KEYWORDS = [
     "book",
     "schedule",
@@ -35,24 +45,42 @@ APPOINTMENT_KEYWORDS = [
     "general medicine",
 ]
 
-# Department synonyms for extraction
+# Healthcare / document-domain words → RAG pipeline.
+# If NONE of these appear in the query, we skip the vector store entirely.
+RAG_TRIGGER_KEYWORDS = [
+    # Medical topics
+    "medication", "medicine", "prescription", "drug", "refill", "dosage",
+    "treatment", "diagnosis", "symptom", "condition", "disease", "illness",
+    "surgery", "procedure", "recovery", "discharge", "follow-up",
+    "pain", "allergy", "vaccine", "vaccination", "lab", "test", "result",
+    # Facility / admin
+    "insurance", "coverage", "claim", "billing", "payment", "copay",
+    "deductible", "prior authorization", "formulary",
+    "appointment", "clinic", "hospital", "doctor", "physician",
+    "nurse", "patient", "portal", "record", "medical record",
+    "department", "specialist", "referral", "emergency",
+    "telehealth", "virtual visit", "telemedicine",
+    # Policy / compliance
+    "hipaa", "privacy", "phi", "data", "consent", "rights",
+    "policy", "guideline", "procedure", "instruction",
+    "hours", "open", "closed", "when", "how long", "how do i",
+    "what is the", "what are", "can i", "do i need",
+]
+
+# ---------------------------------------------------------------------------
+# Department / date helpers (for appointment extraction)
+# ---------------------------------------------------------------------------
+
 _DEPARTMENT_MAP = {
-    "cardiology": ("cardiology", "heart"),
+    "cardiology":  ("cardiology", "heart"),
     "orthopedics": ("orthopedic", "bone", "joint"),
-    "neurology": ("neuro", "brain"),
+    "neurology":   ("neuro", "brain"),
 }
 
-# Day / relative-date tokens for extraction
 _DATE_TOKENS = [
     "monday", "tuesday", "wednesday", "thursday", "friday",
     "saturday", "sunday", "today", "tomorrow", "next week",
 ]
-
-_GREETING_TOKENS = [
-    "hello", "hi", "hey", "greetings", "good morning", "good afternoon", "good evening",
-    "yo", "what is your name", "who are you", "how are you"
-]
-
 
 
 # ---------------------------------------------------------------------------
@@ -61,33 +89,42 @@ _GREETING_TOKENS = [
 
 def detect_intent(question: str) -> str:
     """
-    Classify the user's question as APPOINTMENT_INTENT or RAG_INTENT.
+    Classify the user's question into one of three intents.
 
-    Uses a keyword list focused on booking-action words rather than
-    general appointment mentions, so policy questions still route to RAG.
+    Priority order:
+      1. APPOINTMENT_INTENT  — booking-action keyword found
+      2. RAG_INTENT          — at least one healthcare keyword found
+      3. CONVERSATIONAL_INTENT — no domain keywords; treat as chit-chat
 
     Args:
         question: The raw user question.
 
     Returns:
-        APPOINTMENT_INTENT or RAG_INTENT string constant.
+        One of APPOINTMENT_INTENT, RAG_INTENT, CONVERSATIONAL_INTENT.
     """
     lowered = question.lower().strip()
+
+    # ── 1. Appointment check (highest priority) ──────────────────────────────
     for keyword in APPOINTMENT_KEYWORDS:
         if keyword in lowered:
-            logger.info("Intent detected: %s (matched keyword: '%s')", APPOINTMENT_INTENT, keyword)
+            logger.info(
+                "Intent detected: %s (matched keyword: '%s')",
+                APPOINTMENT_INTENT, keyword,
+            )
             return APPOINTMENT_INTENT
 
-    # Simple heuristic: if the question is very short and starts with or equals a greeting
-    import re
-    if len(lowered) < 30:
-        for greeting in _GREETING_TOKENS:
-            if re.search(r'\b' + re.escape(greeting) + r'\b', lowered):
-                logger.info("Intent detected: %s", GREETING_INTENT)
-                return GREETING_INTENT
+    # ── 2. RAG check — opt-in: only if a domain keyword is present ───────────
+    for keyword in RAG_TRIGGER_KEYWORDS:
+        if keyword in lowered:
+            logger.info(
+                "Intent detected: %s (matched RAG keyword: '%s')",
+                RAG_INTENT, keyword,
+            )
+            return RAG_INTENT
 
-    logger.info("Intent detected: %s", RAG_INTENT)
-    return RAG_INTENT
+    # ── 3. Default: conversational / off-topic ───────────────────────────────
+    logger.info("Intent detected: %s (no domain keywords found)", CONVERSATIONAL_INTENT)
+    return CONVERSATIONAL_INTENT
 
 
 # ---------------------------------------------------------------------------
@@ -127,9 +164,6 @@ def check_available_slots(department: str, date: str) -> dict:
 def handle_appointment_question(question: str) -> dict:
     """
     Handle appointment / scheduling questions using the mock tool.
-
-    Extracts department and date from the question via simple keyword
-    matching, calls check_available_slots, and formats a structured response.
 
     Args:
         question: The user's scheduling-related question.
@@ -184,15 +218,44 @@ def handle_appointment_question(question: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# 4. Greeting handler
+# 4. Conversational handler
 # ---------------------------------------------------------------------------
 
-def handle_greeting(question: str) -> dict:
+def handle_conversational(question: str) -> dict:
     """
-    Handle generic greetings directly to avoid unnecessary RAG searches.
+    Handle greetings, small-talk, and any off-topic messages without
+    touching the vector store.
+
+    Produces a warm, on-brand response that redirects the user toward
+    supported healthcare topics.
     """
+    lowered = question.lower().strip()
+
+    # Personalised response for identity questions
+    if any(phrase in lowered for phrase in ["your name", "who are you", "what are you"]):
+        answer = (
+            "I'm the Healthcare AI Assistant for this medical facility. "
+            "I can answer questions about our policies, medications, insurance, "
+            "discharge instructions, telehealth guidelines, and appointment availability. "
+            "What can I help you with today?"
+        )
+    elif any(phrase in lowered for phrase in ["how are you", "you okay", "you good"]):
+        answer = (
+            "I'm doing great and ready to help! "
+            "Feel free to ask me anything about our healthcare services, "
+            "policies, or appointments."
+        )
+    else:
+        # Generic catch-all for anything off-topic
+        answer = (
+            "Hello! I'm the Healthcare AI Assistant. "
+            "I'm designed to answer questions about our facility's healthcare policies, "
+            "medications, insurance, telehealth, and appointment scheduling. "
+            "How can I assist you today?"
+        )
+
     return {
-        "answer": "Hello! I am the Healthcare AI Assistant. How can I help you with our facility's policies, guidelines, or appointments today?",
+        "answer": answer,
         "sources": [],
         "confidence": "high",
         "question": question,
@@ -210,8 +273,9 @@ def route_and_answer(question: str) -> dict:
     """
     Detect intent and dispatch to the appropriate handler.
 
-    - APPOINTMENT_INTENT → handle_appointment_question (mock scheduling tool)
-    - RAG_INTENT         → query_rag (vector-search + LLM pipeline)
+    - APPOINTMENT_INTENT    → handle_appointment_question (mock scheduling tool)
+    - RAG_INTENT            → query_rag (vector-search + LLM pipeline)
+    - CONVERSATIONAL_INTENT → handle_conversational (no vector store)
 
     Args:
         question: The user's question.
@@ -224,10 +288,10 @@ def route_and_answer(question: str) -> dict:
     if intent == APPOINTMENT_INTENT:
         logger.info("Routing to appointment handler for question: %s", question)
         return handle_appointment_question(question)
-        
-    if intent == GREETING_INTENT:
-        logger.info("Routing to greeting handler for question: %s", question)
-        return handle_greeting(question)
 
-    logger.info("Routing to RAG pipeline for question: %s", question)
-    return query_rag(question)
+    if intent == RAG_INTENT:
+        logger.info("Routing to RAG pipeline for question: %s", question)
+        return query_rag(question)
+
+    logger.info("Routing to conversational handler for question: %s", question)
+    return handle_conversational(question)
