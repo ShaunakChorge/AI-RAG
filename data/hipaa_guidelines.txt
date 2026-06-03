@@ -1,0 +1,24 @@
+HIPAA Privacy Guidelines and Patient Rights
+
+Our healthcare organization is strictly committed to protecting the privacy and security of your personal health information. This document outlines our compliance with the Health Insurance Portability and Accountability Act (HIPAA) and explains your fundamental rights regarding your medical data.
+
+What is Protected Health Information (PHI)?
+Protected Health Information, commonly referred to as PHI, encompasses any individually identifiable health information that is transmitted or maintained in any form or medium. This includes demographic data, your past, present, or future physical or mental health conditions, the specific provision of healthcare services to you, and the past, present, or future payment for the provision of healthcare. Examples of PHI include your name, address, social security number, medical diagnoses, laboratory test results, and billing records.
+
+Patient Rights to Access Records
+Under HIPAA regulations, you have the right to inspect and obtain a copy of your complete medical and billing records. To access your records, you must submit a formal written request to our Health Information Management (HIM) department. We will provide access or deliver a copy of your records, typically within 30 days of receiving your request. We may charge a reasonable, cost-based fee for the expenses associated with copying, mailing, or preparing the requested electronic media.
+
+Who Can Access Records and the Minimum Necessary Standard
+We restrict access to your PHI exclusively to healthcare professionals and administrative staff who require the information to perform their specific job duties, such as providing treatment, processing payments, or conducting healthcare operations. Our organization strictly adheres to the "Minimum Necessary Standard." This principle dictates that when using, disclosing, or requesting PHI, our staff must make reasonable efforts to limit the information to the minimum amount necessary to accomplish the intended purpose of the use or disclosure.
+
+Authorization Requirements
+For uses and disclosures of your PHI that fall outside the scope of treatment, payment, or standard healthcare operations, we must obtain your explicit, written authorization. For example, we cannot use your PHI for marketing purposes, nor can we disclose your records to a life insurance company or a prospective employer, without a signed authorization form from you. You maintain the right to revoke any prior authorization in writing at any time, although this revocation will not apply to actions we have already taken in reliance on your original consent.
+
+Retention Period for Medical Records
+Our facility complies with strict legal requirements regarding the preservation of medical records. Adult patient medical records are securely retained for a minimum period of seven years following the date of the last patient encounter. Records for pediatric patients are retained for seven years, or until the patient reaches the age of twenty-one, whichever period is longer. Upon the expiration of the mandated retention period, all physical and electronic records are permanently and securely destroyed.
+
+Breach Notification Policy
+In the unlikely event that a breach of unsecured PHI occurs, our organization is legally required to notify affected individuals without unreasonable delay, and no later than 60 days following the discovery of the breach. The notification will include a description of the breach, the specific types of PHI involved, the steps we are taking to investigate and mitigate the incident, and actionable advice on what patients can do to protect themselves from potential harm.
+
+How to File a Privacy Complaint
+If you believe your privacy rights have been violated, you have the right to file a formal complaint without fear of retaliation. You may submit a written complaint directly to our designated facility Privacy Officer. Alternatively, you may file a formal complaint with the Office for Civil Rights (OCR) at the United States Department of Health and Human Services.

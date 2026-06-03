@@ -1,0 +1,27 @@
+Telehealth Consultation Clinical Guidelines
+
+Telehealth consultations offer a convenient, secure, and effective method to receive medical care from the comfort of your own home. These guidelines ensure that your virtual visit is conducted efficiently and meets all clinical standards of care.
+
+Eligible Visit Types for Telehealth
+Not all medical concerns are appropriate for virtual assessment. Eligible visit types for telehealth consultations include routine follow-up appointments for stable chronic conditions, discussion of laboratory or imaging test results, initial evaluations for minor acute illnesses such as upper respiratory infections or seasonal allergies, and dedicated mental health therapy sessions. Triage nurses are available to help determine if your specific medical concern is suitable for a virtual format.
+
+What Cannot be Done via Telehealth
+Certain medical situations strictly require an in-person physical examination and cannot be managed via telehealth. These encompass any symptoms suggesting a medical emergency (such as chest pain or difficulty breathing), initial evaluations for undiagnosed severe abdominal pain, conditions requiring hands-on palpation or physical manipulation, the administration of vaccinations or injectable medications, and any visit requiring specialized diagnostic equipment such as an electrocardiogram (EKG) or X-ray imaging.
+
+Technical Requirements
+To participate in a telehealth visit, patients must meet specific technical requirements. You must have access to a reliable broadband internet connection to prevent video disruption. A device equipped with a functional camera, microphone, and speakers is mandatory; this can be a smartphone, tablet, or desktop computer. We strongly recommend testing your audio and video settings at least thirty minutes prior to your scheduled appointment.
+
+How to Join a Telehealth Visit
+Fifteen minutes before your scheduled appointment time, you will receive a secure, encrypted link via SMS text message and email. Clicking this link will prompt you to download our proprietary telehealth application or open the session directly within a compatible web browser. You will be placed in a virtual waiting room until your healthcare provider joins the secure session. Please ensure your device is fully charged or plugged into a power source.
+
+Privacy During Telehealth Sessions
+Protecting your privacy during a virtual consultation is paramount. Patients must participate in the telehealth session from a quiet, private, and enclosed space where the conversation cannot be overheard by unauthorized individuals. Conducting visits in public locations, such as coffee shops or while operating a motor vehicle, is strictly prohibited and will result in the immediate termination of the medical appointment.
+
+Medication Prescriptions via Telehealth
+Our providers are fully authorized to issue electronic medication prescriptions via telehealth, but this is allowed with restrictions. Physicians can prescribe antibiotics, maintenance medications, and standard therapeutic drugs. However, in accordance with current federal guidelines, providers are heavily restricted from initiating new prescriptions for Schedule II controlled substances without a prior in-person medical evaluation.
+
+Insurance Coverage for Telehealth
+The landscape of insurance coverage for telehealth services is continually evolving. While the vast majority of commercial insurance plans and Medicare currently cover telehealth consultations at parity with in-person visits, coverage specifics can vary. Patients are highly encouraged to contact their insurance carrier directly to confirm their exact telehealth benefits and determine if any standard copays or deductibles will apply to the virtual visit.
+
+Cancellation Policy
+The cancellation policy for telehealth appointments is identical to our in-person policy. Patients must provide a minimum of 24 hours' notice if they need to cancel or reschedule their virtual visit. Failure to log into the telehealth session within ten minutes of the scheduled start time will be classified as a "no-show" and will be recorded in your permanent patient administrative file.
