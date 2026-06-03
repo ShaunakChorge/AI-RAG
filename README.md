@@ -9,6 +9,10 @@ app_port: 8000
 
 # Healthcare AI Assistant
 
+🚀 **Live Interactive Demo:** [ai-rag-shaunakchorge.streamlit.app](https://ai-rag-shaunakchorge.streamlit.app)
+
+---
+
 ## Overview
 The Healthcare AI Assistant is a Retrieval‑Augmented Generation (RAG) system that answers patient‑facing questions using only the official healthcare documents of a medical facility. It routes appointment‑booking queries to a mock scheduling tool and all other queries to a LLM‑driven knowledge‑base pipeline.
 
