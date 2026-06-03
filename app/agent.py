@@ -48,7 +48,10 @@ _DATE_TOKENS = [
     "saturday", "sunday", "today", "tomorrow", "next week",
 ]
 
-_GREETING_TOKENS = ["hello", "hi", "hey", "greetings", "good morning", "good afternoon", "good evening"]
+_GREETING_TOKENS = [
+    "hello", "hi", "hey", "greetings", "good morning", "good afternoon", "good evening",
+    "yo", "what is your name", "who are you", "how are you"
+]
 
 
 
