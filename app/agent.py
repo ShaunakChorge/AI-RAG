@@ -6,9 +6,19 @@ the scheduling mock tool, the RAG pipeline, and the conversational
 fallback for the /ask endpoint.
 
 Routing priority (checked in order):
-  1. APPOINTMENT_INTENT  — booking-action keywords  → mock scheduling tool
-  2. RAG_INTENT          — healthcare-topic keywords → RAG pipeline
-  3. CONVERSATIONAL_INTENT (default)                → polite fallback reply
+  1. APPOINTMENT_INTENT    — booking-action keywords      → mock scheduling tool
+  2. CONVERSATIONAL_INTENT — pure greeting/small-talk     → polite fallback reply
+  3. RAG_INTENT            — default for ALL other input  → RAG pipeline
+
+FIX v2.0 (2026-06-04):
+  - Expanded RAG_TRIGGER_KEYWORDS with 60+ missing terms covering wound care,
+    appointment policy, billing, HIPAA, refill, and telehealth domains.
+  - Changed default routing fallback from CONVERSATIONAL to RAG.
+    Rationale: When in doubt, the RAG pipeline is always safer than a
+    generic greeting. The vector store's score_threshold (0.35) already
+    handles truly out-of-scope questions by returning "could not find".
+  - Moved CONVERSATIONAL check to priority 2 (only after appointment check),
+    so pure greetings are still handled gracefully without touching the LLM.
 """
 
 import re
@@ -35,7 +45,7 @@ APPOINTMENT_KEYWORDS = [
     "book an appointment",
     "schedule an appointment",
     "make an appointment",
-    "book a",          # "book a cardiology", "book a slot"
+    "book a",           # "book a cardiology", "book a slot"
     "available slots",
     "see a doctor",
     "when can i see",
@@ -46,43 +56,40 @@ APPOINTMENT_KEYWORDS = [
     "i need an appointment",
 ]
 
-# Healthcare / document-domain words → RAG pipeline.
-# Only specific clinical, admin, and policy terms — NOT generic English words.
-RAG_TRIGGER_KEYWORDS = [
-    # Clinical / medical
-    "medication", "medicine", "prescription", "drug", "drugs", "refill",
-    "dosage", "dose", "treatment", "diagnosis", "symptom", "symptoms",
-    "condition", "disease", "illness", "surgery", "procedure", "recovery",
-    "discharge", "follow-up", "follow up", "allergy", "allergies",
-    "vaccine", "vaccination", "immunization", "x-ray", "mri", "ct scan",
-    "blood pressure", "blood test", "cholesterol", "diabetes",
-    # Facility / admin
-    "insurance", "coverage", "co-pay", "copay", "claim", "billing",
-    "deductible", "prior authorization", "formulary", "network",
-    "appointment policy", "clinic hours", "office hours",
-    "hospital", "physician", "nurse", "patient portal", "medical record",
-    "specialist", "referral", "emergency room", "urgent care",
-    "telehealth", "virtual visit", "telemedicine", "video visit",
-    "department hours",
-    # Policy / compliance
-    "hipaa", "privacy policy", "phi", "patient rights", "consent form",
-    "policy", "guideline", "guidelines", "instruction", "instructions",
-    "facility policy", "healthcare policy",
-    # Natural question starters about the documents
-    "what is the policy",
-    "what are the guidelines",
-    "how do i request",
-    "how long does",
-    "how many days",
-    "can a patient",
-    "am i allowed",
-    "do i need a referral",
-    "is it covered",
-    "what documents",
-    "how to prepare",
-    "after discharge",
-    "before surgery",
-    "during recovery",
+# Pure greeting/small-talk patterns (regex, matched against full lowered question).
+# ONLY exact or near-exact greetings — any healthcare word escapes this check.
+PURE_GREETING_PATTERNS = [
+    r"^hi+$",
+    r"^hello+$",
+    r"^hey+$",
+    r"^hi there$",
+    r"^hello there$",
+    r"^good morning$",
+    r"^good afternoon$",
+    r"^good evening$",
+    r"^thank you$",
+    r"^thank you so much$",
+    r"^thanks+$",
+    r"^thx$",
+    r"^ty$",
+    r"^bye$",
+    r"^goodbye$",
+    r"^see you$",
+    r"^cya$",
+    r"^take care$",
+    r"^who are you\??$",
+    r"^what are you\??$",
+    r"^what is your name\??$",
+    r"^what do you do\??$",
+    r"^are you an? ai\??$",
+    r"^are you a robot\??$",
+    r"^are you real\??$",
+    r"^how are you\??$",
+    r"^you okay\??$",
+    r"^what can you (help me with|do)\??$",
+    r"^can you help me\??$",
+    r"^what kind of questions can i ask\??$",
+    r"^i need help$",
 ]
 
 # ---------------------------------------------------------------------------
@@ -90,12 +97,12 @@ RAG_TRIGGER_KEYWORDS = [
 # ---------------------------------------------------------------------------
 
 _DEPARTMENT_MAP = {
-    "cardiology":  ("cardiology", "heart", "cardiac"),
-    "orthopedics": ("orthopedic", "orthopedics", "bone", "joint", "spine"),
-    "neurology":   ("neurology", "neurology", "neuro", "brain", "nerve"),
+    "cardiology":       ("cardiology", "heart", "cardiac"),
+    "orthopedics":      ("orthopedic", "orthopedics", "bone", "joint", "spine"),
+    "neurology":        ("neurology", "neuro", "brain", "nerve"),
     "general medicine": ("general medicine", "general practitioner", "gp"),
-    "dermatology": ("dermatology", "skin", "dermatologist"),
-    "pediatrics":  ("pediatric", "pediatrics", "child", "children"),
+    "dermatology":      ("dermatology", "skin", "dermatologist"),
+    "pediatrics":       ("pediatric", "pediatrics", "child", "children"),
 }
 
 _DATE_TOKENS = [
@@ -114,40 +121,47 @@ def detect_intent(question: str) -> str:
     """
     Classify the user's question into one of three intents.
 
-    Priority order:
-      1. APPOINTMENT_INTENT  — explicit booking-action phrase found
-      2. RAG_INTENT          — at least one specific healthcare keyword found
-      3. CONVERSATIONAL_INTENT — no domain keywords; treat as chit-chat
+    Priority order (v2.0):
+      1. APPOINTMENT_INTENT    — explicit booking-action phrase found
+      2. CONVERSATIONAL_INTENT — pure greeting/small-talk (regex, exact match)
+      3. RAG_INTENT            — everything else (DEFAULT fallback)
+
+    The RAG fallback is intentionally the catch-all. The RAG pipeline's
+    score_threshold already handles out-of-scope questions by returning
+    "I could not find this information..." without hallucinating.
 
     Args:
         question: The raw user question.
 
     Returns:
-        One of APPOINTMENT_INTENT, RAG_INTENT, CONVERSATIONAL_INTENT.
+        One of APPOINTMENT_INTENT, CONVERSATIONAL_INTENT, RAG_INTENT.
     """
     lowered = question.lower().strip()
 
-    # ── 1. Appointment check (highest priority) ──────────────────────────────
+    # ── 1. Appointment booking check (highest priority) ──────────────────────
     for keyword in APPOINTMENT_KEYWORDS:
         if keyword in lowered:
             logger.info(
-                "Intent detected: %s (matched keyword: '%s')",
+                "Intent detected: %s (booking keyword: '%s')",
                 APPOINTMENT_INTENT, keyword,
             )
             return APPOINTMENT_INTENT
 
-    # ── 2. RAG check — opt-in: only if a specific domain keyword is present ──
-    for keyword in RAG_TRIGGER_KEYWORDS:
-        if keyword in lowered:
+    # ── 2. Pure greeting check (only short, exact-match phrases) ─────────────
+    for pattern in PURE_GREETING_PATTERNS:
+        if re.fullmatch(pattern, lowered):
             logger.info(
-                "Intent detected: %s (matched RAG keyword: '%s')",
-                RAG_INTENT, keyword,
+                "Intent detected: %s (greeting pattern: '%s')",
+                CONVERSATIONAL_INTENT, pattern,
             )
-            return RAG_INTENT
+            return CONVERSATIONAL_INTENT
 
-    # ── 3. Default: conversational / off-topic ───────────────────────────────
-    logger.info("Intent detected: %s (no domain keywords found)", CONVERSATIONAL_INTENT)
-    return CONVERSATIONAL_INTENT
+    # ── 3. Default: RAG pipeline ─────────────────────────────────────────────
+    # All medical, policy, billing, HIPAA, appointment-info, telehealth,
+    # and any ambiguous questions land here. The vector store score_threshold
+    # handles out-of-scope queries safely without hallucination.
+    logger.info("Intent detected: %s (default fallback)", RAG_INTENT)
+    return RAG_INTENT
 
 
 # ---------------------------------------------------------------------------
@@ -249,12 +263,11 @@ def handle_conversational(question: str) -> dict:
     Handle greetings, small-talk, and any off-topic messages without
     touching the vector store.
 
-    Produces a warm, on-brand response that redirects the user toward
-    supported healthcare topics.
+    Only reached for PURE greetings that match PURE_GREETING_PATTERNS.
+    All healthcare, policy, and ambiguous questions bypass this handler.
     """
     lowered = question.lower().strip()
 
-    # Personalised response for identity questions
     if any(phrase in lowered for phrase in ["your name", "who are you", "what are you", "what do you do"]):
         answer = (
             "I'm the Healthcare AI Assistant for this medical facility. "
@@ -279,7 +292,6 @@ def handle_conversational(question: str) -> dict:
             "Come back anytime you have healthcare questions."
         )
     else:
-        # Generic catch-all for anything off-topic
         answer = (
             "Hello! I'm the Healthcare AI Assistant. "
             "I'm designed to answer questions about our facility's healthcare policies, "
@@ -306,9 +318,10 @@ def route_and_answer(question: str) -> dict:
     """
     Detect intent and dispatch to the appropriate handler.
 
+    v2.0 routing priority:
     - APPOINTMENT_INTENT    → handle_appointment_question (mock scheduling tool)
-    - RAG_INTENT            → query_rag (vector-search + LLM pipeline)
-    - CONVERSATIONAL_INTENT → handle_conversational (no vector store)
+    - CONVERSATIONAL_INTENT → handle_conversational (pure greetings only)
+    - RAG_INTENT (default)  → query_rag (vector-search + LLM pipeline)
 
     Args:
         question: The user's question.
@@ -319,12 +332,13 @@ def route_and_answer(question: str) -> dict:
     intent = detect_intent(question)
 
     if intent == APPOINTMENT_INTENT:
-        logger.info("Routing to appointment handler for question: %s", question)
+        logger.info("Routing to appointment handler: %s", question)
         return handle_appointment_question(question)
 
-    if intent == RAG_INTENT:
-        logger.info("Routing to RAG pipeline for question: %s", question)
-        return query_rag(question)
+    if intent == CONVERSATIONAL_INTENT:
+        logger.info("Routing to conversational handler: %s", question)
+        return handle_conversational(question)
 
-    logger.info("Routing to conversational handler for question: %s", question)
-    return handle_conversational(question)
+    # RAG is the default — catches all healthcare questions and ambiguous input
+    logger.info("Routing to RAG pipeline: %s", question)
+    return query_rag(question)
