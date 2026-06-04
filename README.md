@@ -12,11 +12,11 @@ app_port: 8000
 # 🏥 Healthcare AI Assistant
 
 **A production-grade RAG-powered AI assistant for healthcare document Q&A**
-
+<!--
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Streamlit-FF4B4B?style=for-the-badge&logo=streamlit)](https://ai-rag-shaunakchorge.streamlit.app)
 [![Backend API](https://img.shields.io/badge/Backend%20API-Hugging%20Face-FFD21E?style=for-the-badge&logo=huggingface)](https://awesomedevworks-healthcare-ai-backend.hf.space/docs)
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github)](https://github.com/ShaunakChorge/AI-RAG)
-
+-->
 </div>
 
 ---
