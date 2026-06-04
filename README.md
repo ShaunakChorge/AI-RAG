@@ -42,7 +42,7 @@ app_port: 8000
 17. [Limitations & Future Improvements](#-limitations--future-improvements)
 
 ---
-
+<!--
 ## 🚀 Live Demo
 
 | Component | URL |
@@ -53,7 +53,7 @@ app_port: 8000
 > **Tip:** Open the frontend, click **Ingest Documents** in the sidebar first, then start asking healthcare questions.
 
 ---
-
+-->
 ## 🎯 Problem Statement
 
 Mindbowser works with healthcare clients who need AI assistants capable of answering questions from internal clinical, operational, and compliance documents. This prototype demonstrates a fully working **Retrieval-Augmented Generation (RAG)** system that:
