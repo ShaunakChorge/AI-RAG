@@ -1,6 +1,6 @@
 ---
 title: Healthcare AI Assistant Backend
-emoji: H
+emoji: 🏥
 colorFrom: blue
 colorTo: green
 sdk: docker
