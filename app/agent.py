@@ -2,28 +2,32 @@
 Agent Module for Healthcare AI Assistant.
 
 Coordinates intent detection, tool dispatching, and routing between
-the scheduling mock tool, the RAG pipeline, and the conversational
-fallback for the /ask endpoint.
+the scheduling mock tool, the RAG pipeline, and the LLM-grounded
+conversational persona handler for the /ask endpoint.
 
 Routing priority (checked in order):
-  1. APPOINTMENT_INTENT    — booking-action keywords      → mock scheduling tool
-  2. CONVERSATIONAL_INTENT — pure greeting/small-talk     → polite fallback reply
-  3. RAG_INTENT            — default for ALL other input  → RAG pipeline
+  1. APPOINTMENT_INTENT    — booking-action keywords      -> mock scheduling tool
+  2. CONVERSATIONAL_INTENT — greetings/small-talk/off-topic -> LLM persona handler
+  3. RAG_INTENT            — default for ALL other input  -> RAG pipeline
 
-FIX v2.0 (2026-06-04):
-  - Expanded RAG_TRIGGER_KEYWORDS with 60+ missing terms covering wound care,
-    appointment policy, billing, HIPAA, refill, and telehealth domains.
-  - Changed default routing fallback from CONVERSATIONAL to RAG.
-    Rationale: When in doubt, the RAG pipeline is always safer than a
-    generic greeting. The vector store's score_threshold (0.35) already
-    handles truly out-of-scope questions by returning "could not find".
-  - Moved CONVERSATIONAL check to priority 2 (only after appointment check),
-    so pure greetings are still handled gracefully without touching the LLM.
+ARCHITECTURE NOTE (Phase 4, 2026-06-21):
+  The conversational handler previously returned hardcoded if/elif string
+  responses ("Hello! I'm the Healthcare AI Assistant..."). This was replaced
+  with an LLM call grounded in conversational_persona_prompt.txt so that:
+  - Responses vary naturally (no identical canned text every time)
+  - The LLM is explicitly instructed NEVER to invent facility facts
+  - Off-topic, general-medical, and gibberish inputs are handled gracefully
+    in-character without hallucinating
+  The PURE_GREETING_PATTERNS regex list was removed — no longer needed since
+  the persona handler uses a lightweight heuristic instead of exact-match regex.
 """
 
 import re
 import logging
 from app.rag import query_rag
+from app.config import get_settings
+from app.prompts import load_prompt
+from app.llm import invoke_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +43,7 @@ CONVERSATIONAL_INTENT = "conversational"
 # Keyword lists
 # ---------------------------------------------------------------------------
 
-# Booking-action words → mock scheduling tool.
+# Booking-action words -> mock scheduling tool.
 # Kept tight: must be explicit booking verbs, NOT generic medical words.
 APPOINTMENT_KEYWORDS = [
     "book an appointment",
@@ -56,40 +60,42 @@ APPOINTMENT_KEYWORDS = [
     "i need an appointment",
 ]
 
-# Pure greeting/small-talk patterns (regex, matched against full lowered question).
-# ONLY exact or near-exact greetings — any healthcare word escapes this check.
-PURE_GREETING_PATTERNS = [
-    r"^hi+$",
-    r"^hello+$",
-    r"^hey+$",
-    r"^hi there$",
-    r"^hello there$",
-    r"^good morning$",
-    r"^good afternoon$",
-    r"^good evening$",
-    r"^thank you$",
-    r"^thank you so much$",
-    r"^thanks+$",
-    r"^thx$",
-    r"^ty$",
-    r"^bye$",
-    r"^goodbye$",
-    r"^see you$",
-    r"^cya$",
-    r"^take care$",
-    r"^who are you\??$",
-    r"^what are you\??$",
-    r"^what is your name\??$",
-    r"^what do you do\??$",
-    r"^are you an? ai\??$",
-    r"^are you a robot\??$",
-    r"^are you real\??$",
-    r"^how are you\??$",
-    r"^you okay\??$",
-    r"^what can you (help me with|do)\??$",
-    r"^can you help me\??$",
-    r"^what kind of questions can i ask\??$",
-    r"^i need help$",
+# Greeting / small-talk trigger words — used for the lightweight CONVERSATIONAL
+# heuristic in detect_intent(). These are plain substrings, not regex, and only
+# trigger CONVERSATIONAL_INTENT when the question is short AND contains none of
+# the healthcare_hint_terms below. This way "how are telehealth visits billed?"
+# stays in RAG while "how are you?" goes to the persona handler.
+_GREETING_TRIGGERS = [
+    "hi", "hello", "hey", "good morning", "good afternoon", "good evening",
+    "thank you", "thanks", "thx", "ty", "bye", "goodbye", "see you", "cya",
+    "take care", "who are you", "what are you", "what is your name",
+    "what do you do", "are you an ai", "are you a robot", "are you real",
+    "how are you", "you okay", "what can you help", "can you help me",
+    "what kind of questions", "i need help",
+]
+
+# Clearly off-topic patterns — these are very unlikely to be healthcare queries.
+# Match as substrings in the lowered question.
+_OFF_TOPIC_TRIGGERS = [
+    "capital of", "what is the weather", "tell me a joke",
+    "what is 2 plus", "what is 2+", "solve for x",
+    "write me a poem", "write a poem", "write code", "help me code",
+    "python code", "javascript", "factorial of",
+]
+
+# Healthcare hint terms — if any of these appear, the question almost certainly
+# belongs in RAG even if it looks like a greeting/small-talk pattern.
+# Example: "how are telehealth appointments billed?" contains "telehealth".
+_HEALTHCARE_HINTS = [
+    "appointment", "medication", "prescription", "refill", "discharge",
+    "insurance", "hipaa", "phi", "record", "billing", "payment", "copay",
+    "deductible", "claim", "telehealth", "telemedicine", "doctor", "nurse",
+    "patient", "procedure", "wound", "follow-up", "followup", "surgery",
+    "hospital", "clinic", "facility", "health", "medical", "medicine",
+    "diagnosis", "treatment", "drug", "dose", "dosage", "schedule",
+    "slots", "policy", "coverage", "network", "prior auth", "authorization",
+    "emergency", "urgent", "consent", "privacy", "breach", "hipaa",
+    "portal", "lab", "test", "result", "blood", "vitals",
 ]
 
 # ---------------------------------------------------------------------------
@@ -121,14 +127,19 @@ def detect_intent(question: str) -> str:
     """
     Classify the user's question into one of three intents.
 
-    Priority order (v2.0):
+    Priority order:
       1. APPOINTMENT_INTENT    — explicit booking-action phrase found
-      2. CONVERSATIONAL_INTENT — pure greeting/small-talk (regex, exact match)
+      2. CONVERSATIONAL_INTENT — lightweight heuristic: short question
+                                  with a greeting/small-talk/off-topic
+                                  signal AND no healthcare hint terms
       3. RAG_INTENT            — everything else (DEFAULT fallback)
 
-    The RAG fallback is intentionally the catch-all. The RAG pipeline's
-    score_threshold already handles out-of-scope questions by returning
-    "I could not find this information..." without hallucinating.
+    The heuristic for CONVERSATIONAL_INTENT is intentionally conservative:
+    when uncertain, we prefer routing to RAG because the vector store's
+    SIMILARITY_SCORE_THRESHOLD safely handles out-of-scope queries by
+    returning "I could not find..." without hallucinating — much safer
+    than skipping RAG for something that might actually have a document
+    answer. We only skip RAG when the question is clearly non-healthcare.
 
     Args:
         question: The raw user question.
@@ -138,7 +149,7 @@ def detect_intent(question: str) -> str:
     """
     lowered = question.lower().strip()
 
-    # ── 1. Appointment booking check (highest priority) ──────────────────────
+    # -- 1. Appointment booking check (highest priority) ----------------------
     for keyword in APPOINTMENT_KEYWORDS:
         if keyword in lowered:
             logger.info(
@@ -147,19 +158,32 @@ def detect_intent(question: str) -> str:
             )
             return APPOINTMENT_INTENT
 
-    # ── 2. Pure greeting check (only short, exact-match phrases) ─────────────
-    for pattern in PURE_GREETING_PATTERNS:
-        if re.fullmatch(pattern, lowered):
+    # -- 2. Conversational heuristic ------------------------------------------
+    # Only route to the persona handler if BOTH conditions are true:
+    #   a) The question contains a clear greeting/small-talk/off-topic signal
+    #   b) The question contains NO healthcare domain terms
+    # This prevents "how are telehealth visits billed?" from being treated as
+    # small talk just because it starts with "how are".
+
+    # Check condition (b) first — fast exit if any healthcare hint found
+    has_healthcare_hint = any(hint in lowered for hint in _HEALTHCARE_HINTS)
+
+    if not has_healthcare_hint:
+        # Check condition (a) — greeting/small-talk/off-topic signal present
+        is_greeting = any(trigger in lowered for trigger in _GREETING_TRIGGERS)
+        is_off_topic = any(trigger in lowered for trigger in _OFF_TOPIC_TRIGGERS)
+
+        if is_greeting or is_off_topic:
             logger.info(
-                "Intent detected: %s (greeting pattern: '%s')",
-                CONVERSATIONAL_INTENT, pattern,
+                "Intent detected: %s (no healthcare hints; greeting=%s, off_topic=%s)",
+                CONVERSATIONAL_INTENT, is_greeting, is_off_topic,
             )
             return CONVERSATIONAL_INTENT
 
-    # ── 3. Default: RAG pipeline ─────────────────────────────────────────────
-    # All medical, policy, billing, HIPAA, appointment-info, telehealth,
-    # and any ambiguous questions land here. The vector store score_threshold
-    # handles out-of-scope queries safely without hallucination.
+    # -- 3. Default: RAG pipeline ---------------------------------------------
+    # All healthcare, policy, billing, HIPAA, telehealth, ambiguous, and
+    # "how do I / can I / should I" healthcare questions land here.
+    # The vector store score_threshold handles out-of-scope queries safely.
     logger.info("Intent detected: %s (default fallback)", RAG_INTENT)
     return RAG_INTENT
 
@@ -255,56 +279,50 @@ def handle_appointment_question(question: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# 4. Conversational handler
+# 4. LLM-grounded conversational persona handler
 # ---------------------------------------------------------------------------
 
 def handle_conversational(question: str) -> dict:
     """
-    Handle greetings, small-talk, and any off-topic messages without
-    touching the vector store.
+    Handle greetings, small talk, off-topic questions, and gibberish
+    using an LLM call grounded in the conversational persona prompt.
 
-    Only reached for PURE greetings that match PURE_GREETING_PATTERNS.
-    All healthcare, policy, and ambiguous questions bypass this handler.
+    Unlike query_rag(), this path has NO document context — the LLM
+    is instructed via the persona prompt to never invent facility
+    facts and to redirect off-topic or general-medical questions
+    back to its documented scope. This keeps the bot in character
+    for every possible input without hallucinating.
+
+    Uses invoke_with_fallback() so that if the primary model is
+    unavailable, the same fallback chain used in RAG applies here too.
+
+    Args:
+        question: The user's message.
+
+    Returns:
+        Dict matching the AskResponse schema with confidence="conversational".
     """
-    lowered = question.lower().strip()
+    from langchain.schema import HumanMessage, SystemMessage
 
-    if any(phrase in lowered for phrase in ["your name", "who are you", "what are you", "what do you do"]):
-        answer = (
-            "I'm the Healthcare AI Assistant for this medical facility. "
-            "I can answer questions about our policies, medications, insurance, "
-            "discharge instructions, telehealth guidelines, and appointment availability. "
-            "What can I help you with today?"
-        )
-    elif any(phrase in lowered for phrase in ["how are you", "you okay", "you good", "are you well"]):
-        answer = (
-            "I'm doing great and ready to help! "
-            "Feel free to ask me anything about our healthcare services, "
-            "policies, or appointments."
-        )
-    elif any(phrase in lowered for phrase in ["thank", "thanks", "thank you", "thx"]):
-        answer = (
-            "You're welcome! If you have any more healthcare questions, "
-            "feel free to ask anytime."
-        )
-    elif any(phrase in lowered for phrase in ["bye", "goodbye", "see you", "cya"]):
-        answer = (
-            "Goodbye! Take care and stay healthy. "
-            "Come back anytime you have healthcare questions."
-        )
-    else:
-        answer = (
-            "Hello! I'm the Healthcare AI Assistant. "
-            "I'm designed to answer questions about our facility's healthcare policies, "
-            "medications, insurance, telehealth, and appointment scheduling. "
-            "How can I assist you today?"
-        )
+    logger.info("Routing to persona-grounded conversational handler")
+
+    persona_prompt_template = load_prompt("conversational_persona_prompt.txt")
+    filled_prompt = persona_prompt_template.format(message=question)
+
+    messages = [
+        SystemMessage(content=filled_prompt),
+        HumanMessage(content=question),
+    ]
+
+    # invoke_with_fallback returns (answer_text, model_name_that_succeeded)
+    answer, model_used = invoke_with_fallback(messages)
 
     return {
         "answer": answer,
         "sources": [],
         "confidence": "conversational",
         "question": question,
-        "model_used": "rule_based_routing",
+        "model_used": model_used,
         "tool_used": None,
         "tool_response": None,
     }
@@ -318,10 +336,10 @@ def route_and_answer(question: str) -> dict:
     """
     Detect intent and dispatch to the appropriate handler.
 
-    v2.0 routing priority:
-    - APPOINTMENT_INTENT    → handle_appointment_question (mock scheduling tool)
-    - CONVERSATIONAL_INTENT → handle_conversational (pure greetings only)
-    - RAG_INTENT (default)  → query_rag (vector-search + LLM pipeline)
+    Routing priority:
+    - APPOINTMENT_INTENT    -> handle_appointment_question (mock scheduling tool)
+    - CONVERSATIONAL_INTENT -> handle_conversational (LLM persona, no vector search)
+    - RAG_INTENT (default)  -> query_rag (vector-search + LLM pipeline)
 
     Args:
         question: The user's question.
@@ -336,7 +354,7 @@ def route_and_answer(question: str) -> dict:
         return handle_appointment_question(question)
 
     if intent == CONVERSATIONAL_INTENT:
-        logger.info("Routing to conversational handler: %s", question)
+        logger.info("Routing to persona-grounded conversational handler: %s", question)
         return handle_conversational(question)
 
     # RAG is the default — catches all healthcare questions and ambiguous input
