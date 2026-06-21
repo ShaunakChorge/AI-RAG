@@ -60,6 +60,8 @@ def load_documents_from_folder(folder_path: str) -> list:
 def split_documents(documents: list) -> list:
     """Split documents into smaller chunks for vector embedding."""
     settings = get_settings()
+    # Chunk size/overlap are config-driven via settings.CHUNK_SIZE and
+    # settings.CHUNK_OVERLAP — see .env.example to tune without code changes.
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=settings.CHUNK_SIZE,
         chunk_overlap=settings.CHUNK_OVERLAP
