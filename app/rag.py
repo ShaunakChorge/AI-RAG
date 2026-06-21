@@ -11,38 +11,13 @@ from langchain_community.vectorstores import Chroma
 from langchain.schema import HumanMessage, SystemMessage
 from app.config import get_settings
 from app.embeddings import get_embedding_function, get_chroma_client, get_or_create_collection
-from app.llm import get_llm
+from app.llm import get_llm, invoke_with_fallback
+from app.prompts import load_prompt
 
 logger = logging.getLogger(__name__)
 
-# ---------------------------------------------------------------------------
-# Module-level system prompt constant
-# ---------------------------------------------------------------------------
-HEALTHCARE_SYSTEM_PROMPT = """
-You are a healthcare information assistant for a medical facility. 
-Your role is to answer questions based ONLY on the provided context 
-from official healthcare documents.
-
-STRICT RULES:
-1. Answer ONLY from the provided context. Do not use any external 
-   knowledge or make assumptions beyond what is explicitly stated.
-2. If the context does not contain enough information to answer the 
-   question, respond with exactly: 
-   "I could not find this information in the provided documents. 
-   Please contact the healthcare facility directly for assistance."
-3. Never provide medical diagnoses, treatment recommendations, or 
-   medical advice beyond what is explicitly stated in the documents.
-4. Always maintain a professional, clear, and empathetic tone.
-5. If citing information, refer to it as coming from official 
-   facility documentation.
-6. Do not speculate, extrapolate, or fill gaps with general medical 
-   knowledge.
-
-Context from documents:
-{context}
-
-Remember: Only answer from the context above. If uncertain, say so.
-"""
+# System prompt is now loaded from app/prompts/healthcare_rag_system_prompt.txt
+# via the load_prompt() utility. See app/prompts.py for the rationale.
 
 
 def get_retriever(vectorstore):
@@ -55,6 +30,9 @@ def get_retriever(vectorstore):
 
 
 def get_relevant_docs_with_threshold(vectorstore, question: str, k: int = 3, score_threshold: float = 0.35) -> list:
+    # Threshold value lives in config for easy tuning without code changes;
+    # the retrieval function itself stays here because config files cannot
+    # contain executable logic.
     """
     Retrieve top-k chunks but only return those above a minimum similarity
     score to prevent hallucination on completely unrelated queries.
@@ -169,9 +147,12 @@ def query_rag(question: str) -> dict:
             )
 
         # ── 3. Retrieve relevant chunks with score threshold ─────────────────
-        settings = get_settings()
+        # Threshold value comes from settings.SIMILARITY_SCORE_THRESHOLD
+        # (config-driven) — see app/config.py and .env.example to tune it.
         retrieved_docs = get_relevant_docs_with_threshold(
-            vectorstore, question, k=settings.RETRIEVAL_K, score_threshold=0.35
+            vectorstore, question,
+            k=settings.RETRIEVAL_K,
+            score_threshold=settings.SIMILARITY_SCORE_THRESHOLD,
         )
         logger.info("Using %d chunks after score filtering", len(retrieved_docs))
 
@@ -191,16 +172,16 @@ def query_rag(question: str) -> dict:
 
         # ── 4. Build context and call LLM ────────────────────────────────────
         context = "\n\n".join(doc.page_content for doc in retrieved_docs)
-        filled_prompt = HEALTHCARE_SYSTEM_PROMPT.format(context=context)
+        system_prompt_template = load_prompt("healthcare_rag_system_prompt.txt")
+        filled_prompt = system_prompt_template.format(context=context)
 
-        llm = get_llm()
         messages = [
             SystemMessage(content=filled_prompt),
             HumanMessage(content=question),
         ]
-        response = llm.invoke(messages)
-        answer = response.content.strip()
-        logger.info("Answer generated successfully")
+        # Use fallback chain — returns (answer_text, model_name_that_succeeded)
+        answer, model_used = invoke_with_fallback(messages)
+        logger.info("Answer generated successfully via model: %s", model_used)
 
         # ── 5. Build response ────────────────────────────────────────────────
         sources = format_sources(retrieved_docs)
@@ -211,7 +192,7 @@ def query_rag(question: str) -> dict:
             "sources": sources,
             "confidence": confidence,
             "question": question,
-            "model_used": settings.GROQ_MODEL,
+            "model_used": model_used,
         }
 
     except ValueError:
