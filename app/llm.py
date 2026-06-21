@@ -8,7 +8,7 @@ models if the primary model fails (rate limit, API error, deprecation).
 
 import os
 import logging
-from langchain_groq import ChatGroq
+from langchain_groq import ChatGroq  # type: ignore
 from app.config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -90,4 +90,6 @@ def invoke_with_fallback(messages: list) -> tuple[str, str]:
             continue
 
     logger.error("All models in fallback chain failed.")
-    raise last_exception
+    if last_exception is not None:
+        raise last_exception
+    raise Exception("All models in fallback chain failed or no models configured.")
