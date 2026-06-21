@@ -170,8 +170,9 @@ def detect_intent(question: str) -> str:
 
     if not has_healthcare_hint:
         # Check condition (a) — greeting/small-talk/off-topic signal present
-        is_greeting = any(trigger in lowered for trigger in _GREETING_TRIGGERS)
-        is_off_topic = any(trigger in lowered for trigger in _OFF_TOPIC_TRIGGERS)
+        # Use regex word boundaries so 'hi' doesn't match 'washing', 'this', etc.
+        is_greeting = any(re.search(r'\b' + re.escape(trigger) + r'\b', lowered) for trigger in _GREETING_TRIGGERS)
+        is_off_topic = any(re.search(r'\b' + re.escape(trigger) + r'\b', lowered) for trigger in _OFF_TOPIC_TRIGGERS)
 
         if is_greeting or is_off_topic:
             logger.info(
