@@ -62,9 +62,20 @@ class JsonFormatter(logging.Formatter):
 # ─────────────────────────────────────────────────────────────────────────────
 _log_level = getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO)
 
-# Apply the RequestIdFilter to the root logger so all module loggers inherit it
-_root_logger = logging.getLogger()
-_root_logger.addFilter(RequestIdFilter())
+# Use a LogRecord factory that always pre-populates request_id="-" on every
+# new record. This is the belt-and-suspenders default; the RequestIdFilter
+# middleware overwrites it with the actual UUID for application log lines.
+# Without this, uvicorn's own loggers (uvicorn.access, uvicorn.error) that
+# bypass our root logger filter would raise KeyError: 'request_id' when
+# Python's % formatter tries to expand %(request_id)s.
+_original_factory = logging.getLogRecordFactory()
+
+def _record_factory(*args, **kwargs):
+    record = _original_factory(*args, **kwargs)
+    record.request_id = "-"  # default; overwritten per-request by RequestIdFilter
+    return record
+
+logging.setLogRecordFactory(_record_factory)
 
 if settings.LOG_FORMAT == "json":
     _handler = logging.StreamHandler()
@@ -75,6 +86,15 @@ else:
         level=_log_level,
         format="%(asctime)s - %(name)s - %(levelname)s - [req:%(request_id)s] - %(message)s",
     )
+
+# Also add RequestIdFilter to root logger and all its handlers so the ContextVar
+# value (set by add_request_id middleware) is written onto each record during
+# an active request.
+_request_id_filter = RequestIdFilter()
+_root_logger = logging.getLogger()
+_root_logger.addFilter(_request_id_filter)
+for _h in _root_logger.handlers:
+    _h.addFilter(_request_id_filter)
 
 logger = logging.getLogger(__name__)
 

@@ -42,11 +42,21 @@ def test_ask_rejects_too_short_question() -> None:
     assert response.status_code == 422
 
 
-def test_ask_without_ingest_returns_controlled_error() -> None:
+def test_ask_without_ingest_returns_controlled_error(monkeypatch) -> None:
     """
     Verify the /ask endpoint returns 503 (not a 500 crash) when the
     knowledge base is empty and a genuine RAG question is asked.
+
+    Uses monkeypatch to simulate an empty KB regardless of on-disk state,
+    so the test is deterministic across repeated runs.
     """
+    from app import rag
+
+    def mock_query_rag(question: str):
+        raise ValueError("Knowledge base is empty. Please call POST /ingest first.")
+
+    monkeypatch.setattr(rag, "query_rag", mock_query_rag)
+
     response = client.post("/ask", json={"question": "What is the medication refill policy?"})
     # Must not crash with 500 Internal Server Error
     assert response.status_code != 500
