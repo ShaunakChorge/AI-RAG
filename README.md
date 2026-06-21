@@ -1,6 +1,6 @@
 ---
 title: Healthcare AI Assistant Backend
-emoji: 🏥
+emoji: H
 colorFrom: blue
 colorTo: green
 sdk: docker
@@ -9,7 +9,7 @@ app_port: 8000
 
 <div align="center">
 
-# 🏥 Healthcare AI Assistant
+# Healthcare AI Assistant
 
 **A production-grade RAG-powered AI assistant for healthcare document Q&A**
 <!--
@@ -21,29 +21,29 @@ app_port: 8000
 
 ---
 
-## 📋 Table of Contents
+## Table of Contents
 
-1. [Live Demo](#-live-demo)
-2. [Problem Statement](#-problem-statement)
-3. [Architecture](#-architecture)
-4. [Tech Stack](#-tech-stack)
-5. [Project Structure](#-project-structure)
-6. [Knowledge Base Documents](#-knowledge-base-documents)
-7. [Setup & Installation](#-setup--installation)
-8. [Running the Application](#-running-the-application)
-9. [Docker Setup](#-docker-setup)
-10. [API Reference](#-api-reference)
-11. [Agent & Tool Workflow](#-agent--tool-workflow)
-12. [Prompt Engineering Strategy](#-prompt-engineering-strategy)
-13. [Sample Questions & Responses](#-sample-questions--responses)
-14. [LLM, Embedding & Vector DB Choices](#-llm-embedding--vector-db-choices)
-15. [Hallucination Prevention](#-hallucination-prevention)
-16. [Healthcare Compliance Note](#-healthcare-compliance-note)
-17. [Limitations & Future Improvements](#-limitations--future-improvements)
+1. [Live Demo](#live-demo)
+2. [Problem Statement](#problem-statement)
+3. [Architecture](#architecture)
+4. [Tech Stack](#tech-stack)
+5. [Project Structure](#project-structure)
+6. [Knowledge Base Documents](#knowledge-base-documents)
+7. [Setup & Installation](#setup--installation)
+8. [Running the Application](#running-the-application)
+9. [Docker Setup](#docker-setup)
+10. [API Reference](#api-reference)
+11. [Agent & Tool Workflow](#agent--tool-workflow)
+12. [Prompt Engineering Strategy](#prompt-engineering-strategy)
+13. [Sample Questions & Responses](#sample-questions--responses)
+14. [LLM, Embedding & Vector DB Choices](#llm-embedding--vector-db-choices)
+15. [Hallucination Prevention](#hallucination-prevention)
+16. [Healthcare Compliance Note](#healthcare-compliance-note)
+17. [Limitations & Future Improvements](#limitations--future-improvements)
 
 ---
 <!--
-## 🚀 Live Demo
+## Live Demo
 
 | Component | URL |
 |-----------|-----|
@@ -54,7 +54,7 @@ app_port: 8000
 
 ---
 -->
-## 🎯 Problem Statement
+## Problem Statement
 
 Mindbowser works with healthcare clients who need AI assistants capable of answering questions from internal clinical, operational, and compliance documents. This prototype demonstrates a fully working **Retrieval-Augmented Generation (RAG)** system that:
 
@@ -67,77 +67,79 @@ Mindbowser works with healthcare clients who need AI assistants capable of answe
 7. **Exposes** all functionality through a documented REST API
 8. **Routes** appointment-booking queries to a mock scheduling tool (agentic workflow)
 
-> ⚠️ **No real patient data or PHI is used.** All documents are synthetic, facility-policy-style text created specifically for this prototype.
+> **No real patient data or PHI is used.** All documents are synthetic, facility-policy-style text created specifically for this prototype.
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    User (Browser)                                │
-│               Streamlit Frontend UI                              │
-│         (ai-rag-shaunakchorge.streamlit.app)                    │
-└─────────────────────┬───────────────────────────────────────────┘
-                      │  HTTPS POST /ask, POST /ingest, GET /health
-                      ▼
-┌─────────────────────────────────────────────────────────────────┐
-│              FastAPI Backend (Docker on HF Spaces)               │
-│                                                                  │
-│   ┌─────────────────────────────────────────────────────────┐   │
-│   │                  Agent Router (agent.py)                 │   │
-│   │                                                          │   │
-│   │   Intent Detection (keyword-based opt-in routing)        │   │
-│   │        │                                                 │   │
-│   │        ├── APPOINTMENT keywords ──► Mock Scheduling Tool │   │
-│   │        │      check_available_slots(dept, date)          │   │
-│   │        │                                                 │   │
-│   │        ├── HEALTHCARE keywords ────► RAG Pipeline        │   │
-│   │        │      ChromaDB Vector Search                     │   │
-│   │        │      all-MiniLM-L6-v2 Embeddings                │   │
-│   │        │      Similarity Score Threshold (≥ 0.35)        │   │
-│   │        │      Groq LLM (llama-3.1-8b-instant)            │   │
-│   │        │      Structured Response + Citations            │   │
-│   │        │                                                 │   │
-│   │        └── CONVERSATIONAL (default) ──► Rule-based reply  │   │
-│   └─────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                      │  Embeddings API
-                      ▼
-        ┌─────────────────────────────┐
-        │  Groq Cloud API             │
-        │  llama-3.1-8b-instant       │
-        │  (sub-second inference)     │
-        └─────────────────────────────┘
++---------------------------------------------------------------------+
+|                    User (Browser)                                    |
+|               Streamlit Frontend UI                                  |
+|         (ai-rag-shaunakchorge.streamlit.app)                        |
++---------------------+-----------------------------------------------+
+                      |  HTTPS POST /ask, POST /ingest, GET /health
+                      v
++---------------------------------------------------------------------+
+|              FastAPI Backend (Docker on HF Spaces)                   |
+|                                                                      |
+|   +-------------------------------------------------------------+   |
+|   |                  Agent Router (agent.py)                     |   |
+|   |                                                              |   |
+|   |   Intent Detection (keyword-based opt-in routing)            |   |
+|   |        |                                                     |   |
+|   |        +-- APPOINTMENT keywords --> Mock Scheduling Tool     |   |
+|   |        |      check_available_slots(dept, date)              |   |
+|   |        |                                                     |   |
+|   |        +-- HEALTHCARE keywords -----> RAG Pipeline           |   |
+|   |        |      ChromaDB Vector Search                         |   |
+|   |        |      all-MiniLM-L6-v2 Embeddings                    |   |
+|   |        |      Similarity Score Threshold (>= 0.35)           |   |
+|   |        |      Groq LLM (llama-3.1-8b-instant)                |   |
+|   |        |      Structured Response + Citations                 |   |
+|   |        |                                                     |   |
+|   |        +-- CONVERSATIONAL (greetings/off-topic) --> LLM     |   |
+|   |               Persona-grounded response via                  |   |
+|   |               conversational_persona_prompt.txt              |   |
+|   +-------------------------------------------------------------+   |
++---------------------------------------------------------------------+
+                      |  Embeddings API
+                      v
+        +------------------------------+
+        |  Groq Cloud API              |
+        |  llama-3.1-8b-instant        |
+        |  (sub-second inference)      |
+        +------------------------------+
 ```
 
 ### Data Flow — RAG Pipeline
 
 ```
 User Question
-     │
-     ▼
+     |
+     v
 Embed question with all-MiniLM-L6-v2
-     │
-     ▼
+     |
+     v
 Similarity search in ChromaDB
-     │
-     ▼
-Score threshold filter (≥ 0.35) ──► No match? Return "not found" instantly
-     │
-     ▼
+     |
+     v
+Score threshold filter (>= 0.35) --> No match? Return "not found" instantly
+     |
+     v
 Inject top-k chunks into system prompt
-     │
-     ▼
+     |
+     v
 Groq LLM generates grounded answer
-     │
-     ▼
+     |
+     v
 Return: { answer, sources, confidence }
 ```
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 | Layer | Technology | Reason |
 |-------|-----------|--------|
@@ -154,41 +156,45 @@ Return: { answer, sources, confidence }
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 AI-RAG/
-├── app/
-│   ├── __init__.py          # Package marker
-│   ├── agent.py             # Intent detection & 3-way router (appointment / RAG / conversational)
-│   ├── config.py            # Pydantic Settings — all config from .env
-│   ├── embeddings.py        # ChromaDB client, HuggingFace embeddings, ingestion pipeline
-│   ├── llm.py               # Groq LLM wrapper
-│   ├── main.py              # FastAPI app — routes, middleware, error handlers
-│   └── rag.py               # RAG pipeline — retrieval, score filtering, prompt, LLM call
-├── data/                    # Synthetic healthcare policy documents (TXT)
-│   ├── appointment_policy.txt
-│   ├── discharge_instructions.txt
-│   ├── hipaa_guidelines.txt
-│   ├── insurance_faq.txt
-│   ├── medication_refill_policy.txt
-│   └── telehealth_guidelines.txt
-├── tests/
-│   ├── test_api.py          # pytest smoke tests for all endpoints
-│   └── sample_questions.md  # Manual test questions with expected answers
-├── vector_store/            # Auto-created — ChromaDB persistent storage
-├── .env.example             # Template for environment variables
-├── .gitignore
-├── Dockerfile               # Multi-stage production Docker image
-├── docker-compose.yml       # One-command local orchestration
-├── requirements.txt         # Python dependencies with pinned versions
-├── streamlit_app.py         # Streamlit frontend (deployed separately)
-└── README.md
++-- app/
+|   +-- __init__.py          # Package marker
+|   +-- agent.py             # Intent detection & 3-way router (appointment / RAG / conversational)
+|   +-- config.py            # Pydantic Settings -- all config from .env
+|   +-- embeddings.py        # ChromaDB client, HuggingFace embeddings, ingestion pipeline
+|   +-- llm.py               # Groq LLM wrapper with fallback chain
+|   +-- main.py              # FastAPI app -- routes, middleware, error handlers
+|   +-- prompts.py           # Prompt file loader utility
+|   +-- prompts/             # Externalized prompt templates (.txt)
+|   |   +-- healthcare_rag_system_prompt.txt
+|   |   +-- conversational_persona_prompt.txt
+|   +-- rag.py               # RAG pipeline -- retrieval, score filtering, prompt, LLM call
++-- data/                    # Synthetic healthcare policy documents (TXT)
+|   +-- appointment_policy.txt
+|   +-- discharge_instructions.txt
+|   +-- hipaa_guidelines.txt
+|   +-- insurance_faq.txt
+|   +-- medication_refill_policy.txt
+|   +-- telehealth_guidelines.txt
++-- tests/
+|   +-- test_api.py          # pytest smoke tests for all endpoints
+|   +-- sample_questions.md  # Manual test questions with expected answers
++-- vector_store/            # Auto-created -- ChromaDB persistent storage
++-- .env.example             # Template for environment variables
++-- .gitignore
++-- Dockerfile               # Multi-stage production Docker image
++-- docker-compose.yml       # One-command local orchestration
++-- requirements.txt         # Python dependencies with pinned versions
++-- streamlit_app.py         # Streamlit frontend (deployed separately)
++-- README.md
 ```
 
 ---
 
-## 📚 Knowledge Base Documents
+## Knowledge Base Documents
 
 All documents are **synthetic** — written to simulate realistic healthcare facility policies. No real patient data or PHI is included.
 
@@ -203,7 +209,7 @@ All documents are **synthetic** — written to simulate realistic healthcare fac
 
 ---
 
-## ⚙️ Setup & Installation
+## Setup & Installation
 
 ### Prerequisites
 
@@ -252,7 +258,7 @@ All other values have sensible defaults and do not need to be changed for local 
 
 ---
 
-## ▶️ Running the Application
+## Running the Application
 
 ### Option A — FastAPI backend only (default)
 
@@ -293,7 +299,7 @@ You are now ready to ask questions.
 
 ---
 
-## 🐳 Docker Setup
+## Docker Setup
 
 ### Quick start with Docker Compose (recommended)
 
@@ -327,7 +333,7 @@ docker run -p 8000:8000 --env-file .env healthcare-ai
 
 ---
 
-## 📡 API Reference
+## API Reference
 
 ### `GET /health`
 
@@ -391,7 +397,7 @@ Accepts a natural-language healthcare question and returns a grounded answer wit
 { "question": "Can a patient request a medication refill through telehealth?" }
 ```
 
-**Constraints:** `question` must be 3–500 characters.
+**Constraints:** `question` must be 3-500 characters.
 
 **Response:**
 ```json
@@ -426,7 +432,7 @@ curl -X POST http://localhost:8000/ask \
 | `medium` | 1 source document matched |
 | `low` | Sources matched but answer uncertain |
 | `none` | No relevant information found in documents |
-| `conversational` | Off-topic / greeting — no RAG used |
+| `conversational` | Greeting / off-topic — LLM persona handler used, no RAG |
 
 ---
 
@@ -440,32 +446,36 @@ curl -X POST http://localhost:8000/ask \
 
 ---
 
-## 🤖 Agent & Tool Workflow
+## Agent & Tool Workflow
 
 The agent (`app/agent.py`) acts as a **3-way intent router** before any LLM is called:
 
 ```
 Question
-   │
-   ├─ Matches APPOINTMENT_KEYWORDS? (e.g. "book an appointment", "available slots")
-   │       └─► Mock Scheduling Tool: check_available_slots(department, date)
-   │               Returns: available slots, booking instructions
-   │
-   ├─ Matches RAG_TRIGGER_KEYWORDS? (e.g. "medication", "hipaa", "discharge", "insurance")
-   │       └─► RAG Pipeline
-   │               1. Embed question with all-MiniLM-L6-v2
-   │               2. Similarity search ChromaDB (top-3 chunks)
-   │               3. Score threshold filter (≥ 0.35)
-   │               4. Inject context into system prompt
-   │               5. Call Groq LLM
-   │               6. Return answer + citations + confidence
-   │
-   └─ No domain keywords matched? (e.g. "hello", "yo", "how are you")
-           └─► Conversational Handler (no vector store, no LLM call)
-                   Returns: friendly redirect to healthcare topics
+   |
+   +- Matches APPOINTMENT_KEYWORDS? (e.g. "book an appointment", "available slots")
+   |       +-> Mock Scheduling Tool: check_available_slots(department, date)
+   |               Returns: available slots, booking instructions
+   |
+   +- Conversational? (greeting, small talk, off-topic, gibberish)
+   |       +-> LLM Persona Handler (conversational_persona_prompt.txt)
+   |               No document context; LLM instructed never to invent facts
+   |               Responds warmly in-character, redirects to facility scope
+   |
+   +- Default (all healthcare / policy / ambiguous questions)
+           +-> RAG Pipeline
+                   1. Embed question with all-MiniLM-L6-v2
+                   2. Similarity search ChromaDB (top-3 chunks)
+                   3. Score threshold filter (>= 0.35)
+                   4. Inject context into system prompt
+                   5. Call Groq LLM (with fallback chain)
+                   6. Return answer + citations + confidence
 ```
 
-**Key design decision:** RAG is **opt-in**. A query must contain at least one specific healthcare-domain keyword to trigger the vector search. This prevents wasted LLM calls and nonsensical citations for off-topic messages.
+**Key design decisions:**
+- RAG is the **default** for all healthcare questions, including those starting with "can I", "should I", "how do I" — the conversational handler only fires when the question has NO healthcare hint terms.
+- The persona handler uses the LLM rather than hardcoded strings so responses vary naturally and stay in-character for any input.
+- The similarity score threshold (0.35) prevents hallucination for out-of-scope questions by returning "could not find" without calling the LLM.
 
 ### Appointment Tool Example
 
@@ -491,9 +501,13 @@ Question
 
 ---
 
-## 🧠 Prompt Engineering Strategy
+## Prompt Engineering Strategy
 
-The system prompt (`app/rag.py`) is designed to enforce **strict knowledge-only answering**:
+Prompts are stored in `app/prompts/` as plain `.txt` files and loaded at runtime by `app/prompts.py`. This makes prompt changes visible in git diffs as plain text without touching Python code.
+
+### RAG System Prompt (`healthcare_rag_system_prompt.txt`)
+
+The prompt enforces **strict knowledge-only answering**:
 
 ```
 You are a healthcare information assistant for a medical facility.
@@ -523,15 +537,24 @@ Remember: Only answer from the context above. If uncertain, say so.
 
 **Why this works:**
 - Rule 1 prevents external knowledge injection
-- Rule 2 provides an exact fallback string that can be detected programmatically (used by `calculate_confidence()` to set `confidence: "none"`)
+- Rule 2 provides an exact fallback string detected programmatically by `calculate_confidence()` to set `confidence: "none"`
 - Rule 3 adds a healthcare-specific safety layer against harmful medical advice
-- Rules 4–6 ensure professional tone and citation hygiene
+- Rules 4-6 ensure professional tone and citation hygiene
+
+### Conversational Persona Prompt (`conversational_persona_prompt.txt`)
+
+Used for greetings, small talk, off-topic, and gibberish. The LLM is instructed to:
+- Stay in character as the facility's Healthcare AI Assistant
+- Never invent facility-specific facts (hours, staff names, prices)
+- Redirect general medical questions to licensed clinicians
+- Redirect off-topic questions back to its scope
+- Respond warmly and naturally (not a fixed script)
 
 **Additional hallucination guard:** Before the LLM is even called, retrieved chunks are filtered by a **similarity score threshold of 0.35**. If no chunk scores high enough, the "not found" response is returned instantly without consuming any LLM tokens.
 
 ---
 
-## 💬 Sample Questions & Responses
+## Sample Questions & Responses
 
 ### 1. RAG — Medication policy
 
@@ -588,22 +611,23 @@ Remember: Only answer from the context above. If uncertain, say so.
 
 ---
 
-### 6. Conversational — no RAG triggered
+### 6. Conversational — LLM persona (not canned text)
 
 **Q:** `"Hello"`
 
-**A:** `"Hello! I'm the Healthcare AI Assistant. I'm designed to answer questions about our facility's healthcare policies, medications, insurance, telehealth, and appointment scheduling. How can I assist you today?"`
+**A:** `"Hello! I'm here to help with questions about this facility's healthcare policies, appointments, insurance, medications, and more. What can I assist you with today?"`
 
-**Model:** `rule_based_routing` (no vector search, no LLM call)
+**Model:** `llama-3.1-8b-instant` (LLM persona call, no vector search)
 
 ---
 
-## 🔬 LLM, Embedding & Vector DB Choices
+## LLM, Embedding & Vector DB Choices
 
 ### LLM — Groq `llama-3.1-8b-instant`
 
 - **Why Groq over OpenAI:** Groq's LPU inference hardware delivers sub-second response times even on 8B parameter models. The free tier is generous enough for a prototype.
 - **Why llama-3.1-8b-instant:** Provides strong instruction-following at a small memory footprint. The "instant" variant is tuned for fast inference, making the chatbot feel real-time.
+- **Fallback chain:** If the primary model fails (rate limit, deprecation), the system automatically retries with models listed in `GROQ_FALLBACK_MODELS` and reports which model actually answered.
 - **Limitation:** Groq is a cloud service — requires internet and an API key. For fully on-premise deployment, this could be replaced with a local Ollama instance running Llama or Mistral.
 
 ### Embedding Model — `all-MiniLM-L6-v2`
@@ -620,19 +644,19 @@ Remember: Only answer from the context above. If uncertain, say so.
 
 ---
 
-## 🛡️ Hallucination Prevention
+## Hallucination Prevention
 
 This system uses **three independent layers** to prevent the LLM from hallucinating:
 
 | Layer | Mechanism | Where |
 |-------|-----------|-------|
-| **1. Intent gating** | RAG only activates if the query contains a specific healthcare keyword | `app/agent.py` |
+| **1. Intent gating** | Conversational handler fires only when no healthcare hint terms are present; all ambiguous questions go to RAG | `app/agent.py` |
 | **2. Score threshold** | Chunks with relevance score < 0.35 are discarded before the LLM sees them | `app/rag.py` |
-| **3. Prompt enforcement** | System prompt strictly forbids external knowledge and mandates the exact fallback string | `app/rag.py` |
+| **3. Prompt enforcement** | System prompt strictly forbids external knowledge and mandates the exact fallback string | `app/prompts/healthcare_rag_system_prompt.txt` |
 
 ---
 
-## ⚕️ Healthcare Compliance Note
+## Healthcare Compliance Note
 
 This prototype uses **synthetic, publicly available policy-style documents** and never processes real Protected Health Information (PHI).
 
@@ -646,7 +670,7 @@ For production HIPAA compliance, the following would be required:
 
 ---
 
-## 🚧 Limitations & Future Improvements
+## Limitations & Future Improvements
 
 | # | Current Limitation | Suggested Improvement |
 |---|-------------------|-----------------------|
@@ -663,7 +687,7 @@ For production HIPAA compliance, the following would be required:
 
 ---
 
-## 🧪 Running Tests
+## Running Tests
 
 ```bash
 # Install test dependencies (already in requirements.txt)
@@ -683,6 +707,6 @@ The test suite covers:
 
 ---
 
-## 📄 License
+## License
 
 This project was created as a hackathon-style assignment prototype. All synthetic documents are original content created for demonstration purposes only.

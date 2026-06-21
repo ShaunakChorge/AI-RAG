@@ -17,7 +17,7 @@ from datetime import datetime
 # ─────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="Healthcare AI Assistant",
-    page_icon="🏥",
+    page_icon=":hospital:",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -44,18 +44,18 @@ st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
-/* ── Global ── */
+/* -- Global -- */
 html, body, [class*="css"] {
     font-family: 'Inter', sans-serif;
 }
 
-/* ── App background ── */
+/* -- App background -- */
 .stApp {
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
     min-height: 100vh;
 }
 
-/* ── Sidebar ── */
+/* -- Sidebar -- */
 [data-testid="stSidebar"] {
     background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
     border-right: 1px solid rgba(99, 179, 237, 0.2);
@@ -64,7 +64,7 @@ html, body, [class*="css"] {
     color: #e2e8f0 !important;
 }
 
-/* ── Header ── */
+/* -- Header -- */
 .hero-header {
     background: linear-gradient(135deg, rgba(99,179,237,0.15), rgba(129,140,248,0.15));
     border: 1px solid rgba(99,179,237,0.3);
@@ -88,7 +88,7 @@ html, body, [class*="css"] {
     margin: 0;
 }
 
-/* ── Chat messages ── */
+/* -- Chat messages -- */
 .chat-bubble-user {
     background: linear-gradient(135deg, #1d4ed8, #1e40af);
     border-radius: 18px 18px 4px 18px;
@@ -119,7 +119,7 @@ html, body, [class*="css"] {
     margin-top: 6px;
 }
 
-/* ── Confidence badge ── */
+/* -- Confidence badge -- */
 .badge {
     display: inline-block;
     padding: 3px 10px;
@@ -131,7 +131,7 @@ html, body, [class*="css"] {
     margin-right: 6px;
 }
 
-/* ── Source cards ── */
+/* -- Source cards -- */
 .source-card {
     background: rgba(15, 23, 42, 0.7);
     border: 1px solid rgba(99, 179, 237, 0.15);
@@ -151,7 +151,7 @@ html, body, [class*="css"] {
     line-height: 1.5;
 }
 
-/* ── Tool response card ── */
+/* -- Tool response card -- */
 .tool-card {
     background: linear-gradient(135deg, rgba(52, 211, 153, 0.1), rgba(16, 185, 129, 0.05));
     border: 1px solid rgba(52, 211, 153, 0.3);
@@ -162,7 +162,7 @@ html, body, [class*="css"] {
     color: #6ee7b7;
 }
 
-/* ── Status pill ── */
+/* -- Status pill -- */
 .status-pill {
     display: inline-flex;
     align-items: center;
@@ -183,7 +183,7 @@ html, body, [class*="css"] {
     color: #f87171;
 }
 
-/* ── Input area ── */
+/* -- Input area -- */
 [data-testid="stTextInput"] input {
     background: rgba(30, 41, 59, 0.8) !important;
     border: 1px solid rgba(99, 179, 237, 0.3) !important;
@@ -197,7 +197,7 @@ html, body, [class*="css"] {
     box-shadow: 0 0 0 3px rgba(99, 179, 237, 0.15) !important;
 }
 
-/* ── Buttons ── */
+/* -- Buttons -- */
 .stButton > button, .stFormSubmitButton > button {
     background: linear-gradient(135deg, #1d4ed8, #4f46e5) !important;
     color: white !important;
@@ -212,13 +212,13 @@ html, body, [class*="css"] {
     box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4) !important;
 }
 
-/* ── Divider ── */
+/* -- Divider -- */
 hr {
     border-color: rgba(99, 179, 237, 0.15) !important;
     margin: 16px 0 !important;
 }
 
-/* ── Metric cards ── */
+/* -- Metric cards -- */
 [data-testid="stMetric"] {
     background: rgba(30, 41, 59, 0.5);
     border: 1px solid rgba(99, 179, 237, 0.15);
@@ -228,7 +228,7 @@ hr {
 [data-testid="stMetricLabel"] { color: #94a3b8 !important; }
 [data-testid="stMetricValue"] { color: #e2e8f0 !important; }
 
-/* ── Scrollable chat container ── */
+/* -- Scrollable chat container -- */
 .chat-container {
     max-height: 58vh;
     overflow-y: auto;
@@ -329,17 +329,17 @@ def confidence_badge(level: str) -> str:
     return (
         f'<span class="badge" style="background:{color}22;'
         f'border:1px solid {color};color:{color};">'
-        f'⬤ {level.upper()}</span>'
+        f'[{level.upper()}]</span>'
     )
 
 
 def friendly_model_label(model_used: str) -> str:
     """Convert internal model identifiers into human-readable labels."""
     labels = {
-        "scheduling_tool_v1": "📅 Scheduling Tool",
-        "rule_based_routing": "💬 Assistant",
+        "scheduling_tool_v1": "Scheduling Tool",
+        "rule_based_routing": "Assistant",
     }
-    return labels.get(model_used, f"🤖 {model_used}")
+    return labels.get(model_used, model_used)
 
 
 def render_message(msg: dict):
@@ -368,7 +368,7 @@ def render_message(msg: dict):
         if error:
             st.markdown(
                 f'<div class="chat-bubble-assistant">'
-                f'⚠️ <strong>Error:</strong> {safe_text(error)}'
+                f'<strong>Error:</strong> {safe_text(error)}'
                 f'<div class="chat-timestamp">{ts}</div>'
                 f'</div>',
                 unsafe_allow_html=True,
@@ -381,7 +381,7 @@ def render_message(msg: dict):
             tool_tag = (
                 '<span class="badge" style="background:rgba(52,211,153,0.15);'
                 'border:1px solid #34d399;color:#34d399;">'
-                f'🔧 {safe_text(tool_used)}</span>'
+                f'[Tool: {safe_text(tool_used)}]</span>'
             )
 
         badge_html = confidence_badge(confidence)
@@ -405,7 +405,7 @@ def render_message(msg: dict):
             instr = safe_text(tool_response.get("booking_instructions", ""))
             st.markdown(
                 f'<div class="tool-card">'
-                f'📅 <strong>Mock Scheduling Tool Response</strong><br>'
+                f'<strong>Scheduling Tool Response</strong><br>'
                 f'<strong>Department:</strong> {dept} · <strong>Date:</strong> {date}<br>'
                 f'<strong>Available Slots:</strong> {slots}<br>'
                 f'<strong>Booking:</strong> {instr}'
@@ -415,13 +415,13 @@ def render_message(msg: dict):
 
         # Source citations (only show if there are actual sources)
         if sources:
-            with st.expander(f"📄 {len(sources)} source(s) used", expanded=False):
+            with st.expander(f"{len(sources)} source(s) used", expanded=False):
                 for src in sources:
                     doc = safe_text(src.get("document", "unknown"))
                     chunk = safe_text(src.get("chunk", ""))
                     st.markdown(
                         f'<div class="source-card">'
-                        f'<div class="source-doc-name">📎 {doc}</div>'
+                        f'<div class="source-doc-name">[doc] {doc}</div>'
                         f'<div class="source-chunk">{chunk}</div>'
                         f'</div>',
                         unsafe_allow_html=True,
@@ -449,7 +449,7 @@ if question:
     })
 
     # Call the backend
-    with st.spinner("🔍 Searching knowledge base…"):
+    with st.spinner("Searching knowledge base..."):
         start = time.time()
         result = call_ask(question)
         elapsed = round(time.time() - start, 2)
@@ -474,11 +474,11 @@ if question:
 # Sidebar
 # ─────────────────────────────────────────────────────────────────────────────
 with st.sidebar:
-    st.markdown("## 🏥 Healthcare AI")
+    st.markdown("## Healthcare AI")
     st.markdown("---")
 
-    # ── Health status ──
-    st.markdown("### 🔍 System Status")
+    # -- Health status --
+    st.markdown("### System Status")
     if st.button("Check Health", key="btn_health", use_container_width=True):
         with st.spinner("Pinging API..."):
             st.session_state.health_info = call_health()
@@ -507,23 +507,23 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # ── Ingestion ──
-    st.markdown("### 📥 Knowledge Base")
+    # -- Ingestion --
+    st.markdown("### Knowledge Base")
     reset_flag = st.checkbox("Reset before ingesting", value=False, key="reset_chk")
 
     if st.button("Ingest Documents", key="btn_ingest", use_container_width=True):
-        with st.spinner("Ingesting documents… this may take a minute."):
+        with st.spinner("Ingesting documents... this may take a minute."):
             result = call_ingest(reset=reset_flag)
 
         if result and result.get("status") == "success":
             st.session_state.ingested = True
             st.success(
-                f"✅ Ingested {result['documents_loaded']} docs → "
+                f"Ingested {result['documents_loaded']} docs -> "
                 f"{result['chunks_created']} chunks"
             )
         else:
             msg = result.get("message", "Unknown error") if result else "API unreachable"
-            st.error(f"❌ {msg}")
+            st.error(f"Error: {msg}")
 
     if st.session_state.ingested:
         st.markdown(
@@ -531,18 +531,18 @@ with st.sidebar:
             unsafe_allow_html=True,
         )
     else:
-        st.caption("⚠️ Ingest documents before asking questions.")
+        st.caption("Note: Ingest documents before asking questions.")
 
     st.markdown("---")
 
-    # ── Conversation controls ──
-    st.markdown("### 💬 Conversation")
+    # -- Conversation controls --
+    st.markdown("### Conversation")
     if st.button("Clear Chat", key="btn_clear", use_container_width=True):
         st.session_state.messages = []
         st.rerun()
 
     st.markdown("---")
-    st.markdown("### 💡 Sample Questions")
+    st.markdown("### Sample Questions")
     sample_qs = [
         "What is the weight limit for lifting after discharge?",
         "How early should I arrive before my appointment?",
@@ -564,7 +564,7 @@ with st.sidebar:
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="hero-header">
-  <h1 class="hero-title">🏥 Healthcare AI Assistant</h1>
+  <h1 class="hero-title">Healthcare AI Assistant</h1>
   <p class="hero-subtitle">
     RAG-powered · LangChain · ChromaDB · Groq llama-3.1-8b-instant ·
     Appointment routing · Source citations
@@ -581,12 +581,12 @@ with chat_placeholder:
     if not st.session_state.messages:
         st.markdown("""
         <div style="text-align:center;padding:48px 0;color:#475569;">
-            <div style="font-size:3rem;margin-bottom:16px;">💬</div>
+            <div style="font-size:3rem;margin-bottom:16px;">[chat]</div>
             <div style="font-size:1.1rem;font-weight:500;color:#64748b;">
                 Start by ingesting documents, then ask a healthcare question.
             </div>
             <div style="margin-top:10px;font-size:0.85rem;color:#475569;">
-                Try the sample questions in the sidebar →
+                Try the sample questions in the sidebar.
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -603,13 +603,13 @@ with st.form(key="chat_form", clear_on_submit=True, border=False):
     col_input, col_send = st.columns([5, 1])
     with col_input:
         user_query = st.text_input(
-            "Ask a healthcare question…",
+            "Ask a healthcare question...",
             placeholder="e.g. Can I request a medication refill through telehealth?",
             label_visibility="collapsed",
             key="user_input_field",
         )
     with col_send:
-        submit_btn = st.form_submit_button("Send ➤", use_container_width=True)
+        submit_btn = st.form_submit_button("Send", use_container_width=True)
 
 if submit_btn and user_query.strip():
     st.session_state.pending_question = user_query.strip()
