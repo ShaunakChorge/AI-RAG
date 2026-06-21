@@ -198,7 +198,7 @@ html, body, [class*="css"] {
 }
 
 /* ── Buttons ── */
-.stButton > button {
+.stButton > button, .stFormSubmitButton > button {
     background: linear-gradient(135deg, #1d4ed8, #4f46e5) !important;
     color: white !important;
     border: none !important;
@@ -207,7 +207,7 @@ html, body, [class*="css"] {
     font-family: 'Inter', sans-serif !important;
     transition: all 0.2s ease !important;
 }
-.stButton > button:hover {
+.stButton > button:hover, .stFormSubmitButton > button:hover {
     transform: translateY(-1px) !important;
     box-shadow: 0 6px 20px rgba(79, 70, 229, 0.4) !important;
 }
@@ -428,30 +428,17 @@ def render_message(msg: dict):
                     )
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Input callback — runs BEFORE the main script body on widget interaction
-# ─────────────────────────────────────────────────────────────────────────────
-def submit_chat():
-    """
-    Callback fired by the text_input on_change OR by the Send button on_click.
-    Safely reads the current field value, stores it for processing, and clears
-    the field so it appears empty after the next render.
-    """
-    raw = st.session_state.get("user_input_field", "").strip()
-    if raw and len(raw) >= 2:
-        # Only store if not already pending (prevents dual-fire from click+blur)
-        if not st.session_state.pending_question:
-            st.session_state.pending_question = raw
-    st.session_state.user_input_field = ""
+# submit_chat callback removed to prevent double-submit bugs; form submission used instead
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Process any pending question FIRST — before rendering anything
 # ─────────────────────────────────────────────────────────────────────────────
 prefill = st.session_state.pop("prefill_question", "")
-question = prefill or st.session_state.pop("pending_question", "")
+question = prefill or st.session_state.get("pending_question", "")
 
 if question:
+    st.session_state.pending_question = ""
     ts_now = datetime.now().strftime("%H:%M")
 
     # Add user message to history
@@ -612,16 +599,18 @@ with chat_placeholder:
 # ─────────────────────────────────────────────────────────────────────────────
 st.markdown("<br>", unsafe_allow_html=True)
 
-col_input, col_send = st.columns([5, 1])
-with col_input:
-    st.text_input(
-        "Ask a healthcare question…",
-        placeholder="e.g. Can I request a medication refill through telehealth?",
-        label_visibility="collapsed",
-        key="user_input_field",
-        on_change=submit_chat,
-    )
-with col_send:
-    # on_click fires the same callback as on_change. The dedup guard in
-    # submit_chat (checking pending_question is empty) prevents double-send.
-    st.button("Send ➤", key="btn_send", use_container_width=True, on_click=submit_chat)
+with st.form(key="chat_form", clear_on_submit=True, border=False):
+    col_input, col_send = st.columns([5, 1])
+    with col_input:
+        user_query = st.text_input(
+            "Ask a healthcare question…",
+            placeholder="e.g. Can I request a medication refill through telehealth?",
+            label_visibility="collapsed",
+            key="user_input_field",
+        )
+    with col_send:
+        submit_btn = st.form_submit_button("Send ➤", use_container_width=True)
+
+if submit_btn and user_query.strip():
+    st.session_state.pending_question = user_query.strip()
+    st.rerun()
