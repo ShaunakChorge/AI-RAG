@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
 
     # ── LLM Settings ──────────────────────────────────────────────────────────
-    GROQ_MODEL: str = "llama-3.1-8b-instant"
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
     # Comma-separated fallback models tried in order if the primary fails.
     # Edit this list without code changes if Groq deprecates a model.
     # (llama-3.3-70b-versatile and llama-3.1-8b-instant deprecated June 2026;
@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     # Minimum cosine similarity score for a chunk to be used in RAG context.
     # Raise to be stricter (fewer hallucinations, more "not found" replies);
     # lower to be more permissive (more answers, higher hallucination risk).
-    SIMILARITY_SCORE_THRESHOLD: float = 0.35
+    SIMILARITY_SCORE_THRESHOLD: float = 0.20
 
     # ── CORS Settings ─────────────────────────────────────────────────────────
     # Comma-separated list. For local dev, point at your Streamlit port.

@@ -11,6 +11,7 @@ import time
 import streamlit as st
 import requests
 from datetime import datetime
+import streamlit.components.v1 as components
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Page config (must be first Streamlit call)
@@ -566,8 +567,7 @@ st.markdown("""
 <div class="hero-header">
   <h1 class="hero-title">Healthcare AI Assistant</h1>
   <p class="hero-subtitle">
-    RAG-powered · LangChain · ChromaDB · Groq llama-3.1-8b-instant ·
-    Appointment routing · Source citations
+    RAG-powered · LangChain · ChromaDB · Appointment routing · Source citations
   </p>
 </div>
 """, unsafe_allow_html=True)
@@ -575,7 +575,7 @@ st.markdown("""
 # ─────────────────────────────────────────────────────────────────────────────
 # Chat history
 # ─────────────────────────────────────────────────────────────────────────────
-chat_placeholder = st.container()
+chat_placeholder = st.container(height=600)
 
 with chat_placeholder:
     if not st.session_state.messages:
@@ -593,6 +593,25 @@ with chat_placeholder:
     else:
         for msg in st.session_state.messages:
             render_message(msg)
+            
+        # JS auto-scroll hack for custom HTML chat bubbles in st.container
+        components.html(
+            """
+            <script>
+            setTimeout(() => {
+                const parent = window.parent.document;
+                const scrollables = parent.querySelectorAll('[data-testid="stScrollableContainer"]');
+                if (scrollables.length > 0) {
+                    scrollables[0].scrollTop = scrollables[0].scrollHeight;
+                } else {
+                    parent.defaultView.scrollTo(0, parent.document.body.scrollHeight);
+                }
+            }, 50);
+            </script>
+            """,
+            height=0,
+            width=0,
+        )
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Input area

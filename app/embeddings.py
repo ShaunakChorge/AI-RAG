@@ -14,9 +14,11 @@ from langchain_community.vectorstores import Chroma
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.config import get_settings
+from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 
+@lru_cache(maxsize=1)
 def get_embedding_function() -> HuggingFaceEmbeddings:
     """Initialize and return the HuggingFace embedding function."""
     settings = get_settings()
@@ -27,6 +29,7 @@ def get_embedding_function() -> HuggingFaceEmbeddings:
         encode_kwargs={"normalize_embeddings": True}
     )
 
+@lru_cache(maxsize=1)
 def get_chroma_client() -> chromadb.PersistentClient:
     """Initialize and return a persistent ChromaDB client."""
     settings = get_settings()
@@ -97,7 +100,9 @@ def ingest_documents(reset_collection: bool = False) -> dict:
         chunks = split_documents(documents)
         
         logger.info("Adding chunks to vectorstore")
-        vectorstore.add_documents(chunks)
+        import hashlib
+        ids = [hashlib.md5((c.metadata.get("source", "") + c.page_content).encode("utf-8")).hexdigest() for c in chunks]
+        vectorstore.add_documents(chunks, ids=ids)
         
         logger.info("Ingestion complete")
         return {
